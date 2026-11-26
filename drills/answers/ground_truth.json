@@ -1,0 +1,66 @@
+{
+  "synthetic": true,
+  "note": "Ground truth for FlagRewind drills; kept outside code.paths so agent cannot read it.",
+  "scenarios": {
+    "S01": {
+      "expected_verdict": "flag_change",
+      "culprit_feature": "tax_engine_v2",
+      "expected_action": "revert_change",
+      "should_abstain": false
+    },
+    "S02": {
+      "expected_verdict": "flag_change",
+      "culprit_feature": "payment_timeout_ms",
+      "expected_action": "revert_change",
+      "should_abstain": false
+    },
+    "S03": {
+      "expected_verdict": "flag_change",
+      "culprit_feature": "profile_v2",
+      "expected_action": "revert_change",
+      "should_abstain": false
+    },
+    "S04": {
+      "expected_verdict": "flag_change",
+      "culprit_feature": "tax_engine_v2",
+      "expected_action": "revert_change",
+      "should_abstain": false
+    },
+    "S05": {
+      "expected_verdict": "flag_change",
+      "culprit_feature": "tax_engine_v2",
+      "expected_action": "revert_change",
+      "should_abstain": false
+    },
+    "S06": {
+      "expected_verdict": "not_flag_related",
+      "culprit_feature": null,
+      "expected_action": "none",
+      "should_abstain": true
+    },
+    "S07": {
+      "expected_verdict": "not_flag_related",
+      "culprit_feature": null,
+      "expected_action": "none",
+      "should_abstain": true
+    },
+    "S08": {
+      "expected_verdict": "flag_change",
+      "culprit_feature": "payment_provider",
+      "expected_action": "revert_change",
+      "should_abstain": false
+    },
+    "S09": {
+      "expected_verdict": "flag_change",
+      "culprit_feature": "payment_timeout_ms",
+      "expected_action": "revert_change",
+      "should_abstain": false
+    },
+    "S10": {
+      "expected_verdict": "flag_change",
+      "culprit_feature": "eu-customers",
+      "expected_action": "revert_change",
+      "should_abstain": false
+    }
+  }
+}

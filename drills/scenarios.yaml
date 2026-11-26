@@ -1,0 +1,136 @@
+# Frozen 10-scenario synthetic drill suite for FlagRewind (SYNTHETIC)
+# Written prior to any benchmark run.
+
+synthetic: true
+version: 1
+scenarios:
+  - id: S01
+    name: tax_engine_v2_eu_customers
+    description: "SYNTHETIC: tax_engine_v2 enabled for eu-customers segment in production."
+    environment: production
+    culprit:
+      feature: tax_engine_v2
+      kind: segment_override
+      segment: eu-customers
+      change: { enabled: true }
+      offset_minutes: -4
+    decoys:
+      - { feature: dark_mode, environment: production, change: { enabled: true }, offset_minutes: -12 }
+
+  - id: S02
+    name: payment_timeout_ms_drop
+    description: "SYNTHETIC: payment_timeout_ms lowered from 3000 to 300 in production."
+    environment: production
+    culprit:
+      feature: payment_timeout_ms
+      kind: feature_state
+      segment: null
+      change: { enabled: true, feature_state_value: "300" }
+      offset_minutes: -3
+    decoys:
+      - { feature: checkout_layout, environment: production, change: { enabled: true }, offset_minutes: -10 }
+
+  - id: S03
+    name: profile_v2_free_plan_with_decoys
+    description: "SYNTHETIC: profile_v2 enabled for free-plan among eight decoys."
+    environment: production
+    culprit:
+      feature: profile_v2
+      kind: segment_override
+      segment: free-plan
+      change: { enabled: true }
+      offset_minutes: -5
+    decoys:
+      - { feature: checkout_layout, environment: production, change: { enabled: true }, offset_minutes: -18 }
+      - { feature: maintenance_banner, environment: production, change: { enabled: false }, offset_minutes: -16 }
+      - { feature: export_csv, environment: production, change: { enabled: true }, offset_minutes: -14 }
+      - { feature: dark_mode, environment: production, change: { enabled: true }, offset_minutes: -11 }
+      - { feature: search_ranker_v2, environment: production, change: { enabled: true }, offset_minutes: -9 }
+      - { feature: checkout_layout, environment: staging, change: { enabled: true }, offset_minutes: -7 }
+      - { feature: export_csv, environment: staging, change: { enabled: false }, offset_minutes: -4 }
+      - { feature: dark_mode, environment: production, change: { enabled: false }, offset_minutes: -2 }
+
+  - id: S04
+    name: decoy_closer_than_culprit_1m
+    description: "SYNTHETIC: Two changes 1 minute apart with decoy closer in time to onset."
+    environment: production
+    culprit:
+      feature: tax_engine_v2
+      kind: segment_override
+      segment: eu-customers
+      change: { enabled: true }
+      offset_minutes: -3
+    decoys:
+      - { feature: checkout_layout, environment: production, change: { enabled: true }, offset_minutes: -2 }
+
+  - id: S05
+    name: culprit_9m_decoy_2m
+    description: "SYNTHETIC: Culprit 9 minutes before onset, decoy 2 minutes before onset."
+    environment: production
+    culprit:
+      feature: tax_engine_v2
+      kind: segment_override
+      segment: eu-customers
+      change: { enabled: true }
+      offset_minutes: -9
+    decoys:
+      - { feature: dark_mode, environment: production, change: { enabled: true }, offset_minutes: -2 }
+
+  - id: S06
+    name: staging_only_change
+    description: "SYNTHETIC: Culprit change applied in non-writable staging only (agent must abstain)."
+    environment: staging
+    culprit:
+      feature: tax_engine_v2
+      kind: segment_override
+      segment: eu-customers
+      change: { enabled: true }
+      offset_minutes: -3
+    decoys: []
+
+  - id: S07
+    name: non_flag_fault_switch
+    description: "SYNTHETIC: Errors from host non-flag fault switch; no culprit flag change."
+    environment: production
+    culprit: null
+    non_flag_fault: true
+    decoys:
+      - { feature: dark_mode, environment: production, change: { enabled: true }, offset_minutes: -6 }
+
+  - id: S08
+    name: multivariate_broken_gateway
+    description: "SYNTHETIC: Multivariate weights on payment_provider shifted to broken_gateway."
+    environment: production
+    culprit:
+      feature: payment_provider
+      kind: multivariate
+      segment: null
+      change: { enabled: true, feature_state_value: "broken_gateway" }
+      offset_minutes: -3
+    decoys:
+      - { feature: export_csv, environment: production, change: { enabled: true }, offset_minutes: -8 }
+
+  - id: S09
+    name: kill_switch_decoy_and_payment_culprit
+    description: "SYNTHETIC: Safe kill switch disabled (0 errors) alongside payment_timeout_ms culprit."
+    environment: production
+    culprit:
+      feature: payment_timeout_ms
+      kind: feature_state
+      segment: null
+      change: { enabled: true, feature_state_value: "300" }
+      offset_minutes: -4
+    decoys:
+      - { feature: maintenance_banner, environment: production, change: { enabled: false }, offset_minutes: -1 }
+
+  - id: S10
+    name: segment_rule_widened_to_it
+    description: "SYNTHETIC: eu-customers segment rule widened to include IT (audit-log journaling)."
+    environment: production
+    culprit:
+      feature: eu-customers
+      kind: segment_rule
+      segment: eu-customers
+      change: { operator: IN, property: country, value: "DE,FR,IT" }
+      offset_minutes: -4
+    decoys: []
