@@ -1,0 +1,30 @@
+{
+  "synthetic": true,
+  "note": "Ground truth for FlagRewind held-out drills (drills-heldout-v1); kept outside code.paths so agent cannot read it.",
+  "scenarios": {
+    "H01": {
+      "expected_verdict": "flag_change",
+      "culprit_feature": "profile_v2",
+      "expected_action": "revert_change",
+      "should_abstain": false
+    },
+    "H02": {
+      "expected_verdict": "not_flag_related",
+      "culprit_feature": null,
+      "expected_action": "none",
+      "should_abstain": true
+    },
+    "H03": {
+      "expected_verdict": "flag_change",
+      "culprit_feature": "payment_timeout_ms",
+      "expected_action": "revert_change",
+      "should_abstain": false
+    },
+    "H04": {
+      "expected_verdict": "flag_change",
+      "culprit_feature": "payment_provider",
+      "expected_action": "revert_change",
+      "should_abstain": false
+    }
+  }
+}

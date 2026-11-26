@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -100,27 +101,45 @@ class OpenAICompatibleLLMClient:
             {"role": "user", "content": user_prompt},
         ]
 
-        try:
-            resp = self._client.chat.completions.create(
-                model=self.model,
-                messages=messages,  # type: ignore[arg-type]
-                temperature=self.temperature,
-                response_format=response_format,  # type: ignore[arg-type]
-            )
-        except OpenAIError as exc:
-            # Fallback once from json_schema to json_object if endpoint rejects strict schema.
-            if json_schema is not None:
-                try:
-                    resp = self._client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,  # type: ignore[arg-type]
-                        temperature=self.temperature,
-                        response_format={"type": "json_object"},  # type: ignore[arg-type]
-                    )
-                except OpenAIError as retry_exc:
-                    raise LLMClientError(f"LLM API failed: {retry_exc}") from retry_exc
-            else:
-                raise LLMClientError(f"LLM API failed: {exc}") from exc
+        # Rate-limiting / pacing and exponential backoff for free-tier APIs (e.g. Gemini 15 RPM).
+        # Retry up to 3 times on 429/ResourceExhausted with jittered backoff.
+        max_attempts = 4
+        backoff_delay = 5.0
+        resp = None
+
+        for attempt in range(max_attempts):
+            try:
+                resp = self._client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,  # type: ignore[arg-type]
+                    temperature=self.temperature,
+                    response_format=response_format,  # type: ignore[arg-type]
+                )
+                break
+            except OpenAIError as exc:
+                err_msg = str(exc).lower()
+                is_rate_limit = (
+                    "429" in err_msg or "resource_exhausted" in err_msg or "quota" in err_msg
+                )
+                if is_rate_limit and attempt < max_attempts - 1:
+                    time.sleep(backoff_delay)
+                    backoff_delay *= 2.0
+                    continue
+
+                # Fallback once from json_schema to json_object if endpoint rejects strict schema.
+                if json_schema is not None and not is_rate_limit:
+                    try:
+                        resp = self._client.chat.completions.create(
+                            model=self.model,
+                            messages=messages,  # type: ignore[arg-type]
+                            temperature=self.temperature,
+                            response_format={"type": "json_object"},  # type: ignore[arg-type]
+                        )
+                        break
+                    except OpenAIError as retry_exc:
+                        raise LLMClientError(f"LLM API failed: {retry_exc}") from retry_exc
+                else:
+                    raise LLMClientError(f"LLM API failed: {exc}") from exc
 
         raw_text = ""
         if resp.choices and resp.choices[0].message.content:

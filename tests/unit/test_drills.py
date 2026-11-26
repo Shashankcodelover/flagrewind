@@ -94,8 +94,35 @@ def _make_metrics_and_errors(
             "pro",
             "apply_tax_engine",
         ),
+        "H01": ("KeyError", "Missing pro_badge in profile_v2", "US", "free", "render_profile"),
+        "H02": (
+            "MemoryExhaustionError",
+            "Host memory exhaustion in external service",
+            "US",
+            "pro",
+            "apply_external_host_check",
+            "external_infra.py",
+        ),
+        "H03": (
+            "PaymentTimeoutError",
+            "Timed out at payment_timeout_ms=150",
+            "US",
+            "pro",
+            "check_payment_timeout",
+            "faults.py",
+        ),
+        "H04": (
+            "PaymentGatewayError",
+            "payment_provider=broken_gateway rejected",
+            "US",
+            "pro",
+            "charge_payment_provider",
+            "faults.py",
+        ),
     }
-    err_type, msg, cc, plan, fn = fault_map[scenario_id]
+    item = fault_map[scenario_id]
+    err_type, msg, cc, plan, fn = item[0], item[1], item[2], item[3], item[4]
+    frame_file = item[5] if len(item) > 5 else "faults.py"
     breach_win = {
         "window_start": onset.isoformat(),
         "epoch_s": int(onset.timestamp()),
@@ -119,7 +146,7 @@ def _make_metrics_and_errors(
                 "message": msg,
                 "frames": [
                     {
-                        "file": str(repo_root / "demo_service" / "faults.py"),
+                        "file": str(repo_root / "demo_service" / frame_file),
                         "line": 63,
                         "function": fn,
                     }
@@ -247,5 +274,118 @@ def test_all_10_scenarios_rules_pipeline_and_scorer(tmp_path: Path) -> None:
     assert rules_metrics["abstention_accuracy"] == 1.0
     assert rules_metrics["action_correctness"] == 1.0
     assert rules_metrics["unapproved_writes"] == 0
+
+
+def test_heldout_scenarios_validation(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    cfg = load_config(repo_root / "flagrewind.yaml")
+    code_idx = CodeIndex.build(repo_root, cfg.code.paths)
+    scenarios = load_scenarios(repo_root / "drills" / "heldout.yaml")
+    truth = json.loads(
+        (repo_root / "drills" / "answers" / "ground_truth_heldout.json").read_text(encoding="utf-8")
+    )["scenarios"]
+
+    assert len(scenarios) == 4
+    runs: list[DrillRunRecord] = []
+    onset = datetime(2026, 11, 26, 14, 0, 0, tzinfo=UTC)
+
+    for scenario in scenarios:
+        sid = scenario["id"]
+        journal_file = tmp_path / f"heldout_{sid}.jsonl"
+        store = JournalStore(journal_file)
+
+        culprit = scenario.get("culprit")
+        if culprit:
+            store.append(
+                {
+                    "id": f"CHG-{sid}-01",
+                    "source": "audit" if culprit.get("kind") == "segment_rule" else "webhook",
+                    "occurred_at": (
+                        onset + timedelta(minutes=culprit.get("offset_minutes", -5))
+                    ).isoformat(),
+                    "received_at": (
+                        onset + timedelta(minutes=culprit.get("offset_minutes", -5))
+                    ).isoformat(),
+                    "environment": scenario.get("environment", "production"),
+                    "feature": culprit["feature"],
+                    "kind": culprit.get("kind", "feature_state"),
+                    "segment": culprit.get("segment"),
+                    "previous": (
+                        {"enabled": False, "value": None}
+                        if culprit.get("kind") != "multivariate"
+                        else {"enabled": True, "value": "stripe_v1"}
+                    ),
+                    "new": (
+                        {
+                            "enabled": True,
+                            "value": culprit.get("change", {}).get("feature_state_value"),
+                        }
+                        if culprit.get("kind") == "feature_state"
+                        else culprit.get("change", {"enabled": True, "value": None})
+                    ),
+                    "actor": "drill-runner",
+                    "raw_ref": {},
+                }
+            )
+
+        for i, decoy in enumerate(scenario.get("decoys", [])):
+            store.append(
+                {
+                    "id": f"CHG-{sid}-D{i+1:02d}",
+                    "source": "webhook",
+                    "occurred_at": (
+                        onset + timedelta(minutes=decoy.get("offset_minutes", -10 - i))
+                    ).isoformat(),
+                    "received_at": (
+                        onset + timedelta(minutes=decoy.get("offset_minutes", -10 - i))
+                    ).isoformat(),
+                    "environment": decoy.get("environment", "production"),
+                    "feature": decoy["feature"],
+                    "kind": "feature_state",
+                    "segment": None,
+                    "previous": {"enabled": False, "value": None},
+                    "new": decoy.get("change", {"enabled": True, "value": None}),
+                    "actor": "drill-runner",
+                    "raw_ref": {},
+                }
+            )
+
+        metrics, errors = _make_metrics_and_errors(sid, onset, repo_root)
+        symptom = analyze_metrics_and_errors(
+            metrics, errors, threshold=0.05, baseline_window_s=120, detect_window_s=30, now=onset
+        )
+        bundle = build_evidence_bundle(
+            incident_id=f"INC-{sid}",
+            config=cfg,
+            store=store,
+            symptom=symptom,
+            code_index=code_idx,
+        )
+        verdict = rank_with_rules(bundle, confidence_floor=cfg.policy.confidence_floor)
+        cand_by_id = {c.change_id: c.feature for c in bundle.candidates}
+        ranked_feats = [
+            cand_by_id[r.change_id] for r in verdict.ranking if r.change_id in cand_by_id
+        ]
+
+        runs.append(
+            DrillRunRecord(
+                scenario_id=sid,
+                mode="rules-only",
+                seed=42,
+                verdict=verdict.verdict,
+                ranked_features=ranked_feats,
+                recommended_action=verdict.recommended.action,
+                time_to_mitigation_s=10.0,
+                time_to_recovery_s=18.0,
+                unapproved_writes=0,
+            )
+        )
+
+    summary = score_runs(runs, truth)
+    rules_metrics = summary["by_mode"]["rules-only"]
+    assert rules_metrics["runs"] == 4
+    assert rules_metrics["unapproved_writes"] == 0
+    # Logged results without assumption
+
     for run in runs:
         assert run.verdict == truth[run.scenario_id]["expected_verdict"]

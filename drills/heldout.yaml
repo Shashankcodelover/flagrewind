@@ -1,0 +1,60 @@
+# Held-out 4-scenario synthetic drill suite for FlagRewind (SYNTHETIC)
+# These scenarios test novel permutations never seen during rule tuning.
+# Tagged as drills-heldout-v1 to guarantee unbiased evaluation.
+
+synthetic: true
+version: 1
+scenarios:
+  - id: H01
+    name: profile_v2_enterprise_decoy_culprit
+    description: "SYNTHETIC: profile_v2 enabled for free-plan while checkout_layout and dark_mode decoys were toggled 1m before."
+    environment: production
+    culprit:
+      feature: profile_v2
+      kind: segment_override
+      segment: free-plan
+      change: { enabled: true }
+      offset_minutes: -6
+    decoys:
+      - { feature: dark_mode, environment: production, change: { enabled: true }, offset_minutes: -7 }
+      - { feature: checkout_layout, environment: production, change: { enabled: true }, offset_minutes: -1 }
+
+  - id: H02
+    name: non_flag_memory_exhaustion
+    description: "SYNTHETIC: Non-flag memory/host crash; stack traces originate from outside Flagsmith feature code. Agent must abstain."
+    environment: production
+    culprit: null
+    non_flag_fault: true
+    decoys:
+      - { feature: export_csv, environment: production, change: { enabled: true }, offset_minutes: -5 }
+      - { feature: maintenance_banner, environment: production, change: { enabled: true }, offset_minutes: -8 }
+
+  - id: H03
+    name: payment_timeout_extreme_drop_multi_decoy
+    description: "SYNTHETIC: payment_timeout_ms lowered to 150ms with 4 decoys in staging and production."
+    environment: production
+    culprit:
+      feature: payment_timeout_ms
+      kind: feature_state
+      segment: null
+      change: { enabled: true, feature_state_value: "150" }
+      offset_minutes: -5
+    decoys:
+      - { feature: search_ranker_v2, environment: production, change: { enabled: true }, offset_minutes: -12 }
+      - { feature: tax_engine_v2, environment: staging, change: { enabled: true }, offset_minutes: -4 }
+      - { feature: checkout_layout, environment: production, change: { enabled: false }, offset_minutes: -2 }
+      - { feature: dark_mode, environment: staging, change: { enabled: true }, offset_minutes: -1 }
+
+  - id: H04
+    name: multivariate_payment_provider_with_staging_culprit_decoy
+    description: "SYNTHETIC: payment_provider variant broken_gateway in production, while tax_engine_v2 was altered in staging."
+    environment: production
+    culprit:
+      feature: payment_provider
+      kind: multivariate
+      segment: null
+      change: { enabled: true, feature_state_value: "broken_gateway" }
+      offset_minutes: -3
+    decoys:
+      - { feature: tax_engine_v2, environment: staging, change: { enabled: true }, offset_minutes: -2 }
+      - { feature: maintenance_banner, environment: production, change: { enabled: false }, offset_minutes: -9 }
