@@ -55,6 +55,10 @@ def resolve_approver_name(
     return entered
 
 
+def _stdin_is_interactive() -> bool:
+    return sys.stdin.isatty()
+
+
 def request_approval(
     plan: MitigationPlan,
     option: PlanOption,
@@ -68,7 +72,7 @@ def request_approval(
     """Prompt human for exact confirmation phrase; reject automatically if non-interactive."""
     phrase_target = expected_phrase or expected_approval_phrase(plan.plan_id, option.n)
     plan_hash = compute_plan_hash(plan, option.n)
-    interactive = sys.stdin.isatty() if is_interactive is None else is_interactive
+    interactive = _stdin_is_interactive() if is_interactive is None else is_interactive
 
     if not interactive:
         return ApprovalRecord(

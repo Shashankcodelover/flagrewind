@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import json
 import re
+import threading
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
 import typer
+import uvicorn
 from rich.console import Console
 
-from flagrewind.approval import request_approval
+from flagrewind.approval import expected_undo_phrase, request_approval
 from flagrewind.audit import AuditTrail
 from flagrewind.capabilities import run_doctor
 from flagrewind.codeindex import CodeIndex
@@ -25,10 +28,22 @@ from flagrewind.config import (
     state_dir_for,
 )
 from flagrewind.evidence import EvidenceBundle, build_evidence_bundle
-from flagrewind.executor import ExecutorError, PreconditionDriftError, execute_option
-from flagrewind.flagsmith_client import FlagsmithAuthOrReachabilityError, FlagsmithClient
+from flagrewind.executor import (
+    ExecutionResult,
+    ExecutorError,
+    PreconditionDriftError,
+    execute_option,
+)
+from flagrewind.flagsmith_client import (
+    FlagsmithAuthOrReachabilityError,
+    FlagsmithClient,
+    FlagsmithError,
+)
+from flagrewind.journal.audit_poll import AuditPoller
 from flagrewind.journal.store import JournalStore
+from flagrewind.journal.webhook import create_webhook_app
 from flagrewind.llm_client import OpenAICompatibleLLMClient
+from flagrewind.notifier import send_notify_webhook
 from flagrewind.planner import MitigationPlan, build_mitigation_plan
 from flagrewind.ranking.llm import rank_with_llm
 from flagrewind.ranking.rules import rank_with_rules
@@ -127,110 +142,26 @@ def _load_saved_incident(
     return bundle, verdict, plan, mode
 
 
-@app.callback()
-def main(
-    ctx: typer.Context,
-    config: Annotated[
-        Path,
-        typer.Option("--config", help="Path to flagrewind.yaml configuration file."),
-    ] = Path("flagrewind.yaml"),
-    no_llm: Annotated[
-        bool,
-        typer.Option("--no-llm", help="Force deterministic rules-only ranking (skip LLM)."),
-    ] = False,
-) -> None:
-    """Load and validate configuration before running any subcommand."""
-    console = _make_console()
-    try:
-        loaded = load_config(config)
-    except ConfigError as exc:
-        console.print(f"[red]Configuration error:[/red] {exc}")
-        raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from exc
-
-    ctx.obj = RuntimeContext(
-        config_path=config,
-        config=loaded,
-        state_dir=state_dir_for(config),
-        no_llm=no_llm,
-        console=console,
-    )
-
-
-@app.command()
-def doctor(ctx: typer.Context) -> None:
-    """Verify Flagsmith API, key, environments, journal, webhook port, and LLM access."""
-    runtime = _require_ctx(ctx)
-    ok, _ = run_doctor(runtime.config, runtime.state_dir, console=runtime.console)
-    if not ok:
-        raise typer.Exit(code=int(ExitCode.REMOTE_UNREACHABLE))
-
-
-@app.command()
-def journal(ctx: typer.Context) -> None:
-    """Run the Flagsmith webhook receiver and audit-log poller."""
-    runtime = _require_ctx(ctx)
-    runtime.console.print(
-        f"Journal listener configured on port {runtime.config.journal.webhook_port}."
-    )
-
-
-@app.command()
-def watch(ctx: typer.Context) -> None:
-    """Poll symptom metrics and open read-only investigations on threshold breach."""
-    runtime = _require_ctx(ctx)
-    runtime.console.print(
-        f"Watch configured for {runtime.config.symptoms.demo_url} "
-        f"(threshold={runtime.config.symptoms.error_rate_threshold:.2%})."
-    )
-
-
-@app.command()
-def investigate(
-    ctx: typer.Context,
-    since: Annotated[str, typer.Option("--since", help="Lookback window, e.g. 30m.")] = "30m",
-    symptom: Annotated[
-        str | None, typer.Option("--symptom", help="Optional symptom description.")
-    ] = None,
-) -> None:
-    """Gather evidence, rank suspects, build dry-run plan, and render one-screen brief."""
-    runtime = _require_ctx(ctx)
-    try:
-        since_min = _parse_since_minutes(since)
-    except ConfigError as exc:
-        runtime.console.print(str(exc))
-        raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from exc
-
+def _run_investigation(
+    runtime: RuntimeContext,
+    *,
+    symptom_summary: SymptomSummary,
+    extra_notes: list[str] | None = None,
+    notify_url: str | None = None,
+) -> tuple[EvidenceBundle, RankingVerdict, MitigationPlan, str]:
     store = JournalStore(
         runtime.state_dir / "journal.jsonl",
         runtime.state_dir / "journal_heartbeat.json",
     )
-    try:
-        with DemoSymptomReader(runtime.config.symptoms) as reader:
-            symptom_summary = reader.fetch()
-    except SymptomError as exc:
-        if not symptom:
-            runtime.console.print(f"Symptom source error: {exc}")
-            raise typer.Exit(code=int(ExitCode.REMOTE_UNREACHABLE)) from exc
-        now_dt = datetime.now(UTC)
-        symptom_summary = SymptomSummary(
-            onset=now_dt - timedelta(minutes=min(since_min, 5)),
-            breached=True,
-            baseline=0.0,
-            current=runtime.config.symptoms.error_rate_threshold,
-            by_dimension=DimensionBreakdown(),
-            error_samples=[],
-        )
-
     code_idx = CodeIndex.build(runtime.config_path.resolve().parent, runtime.config.code.paths)
     inc_id = _next_incident_id(runtime.state_dir)
-    notes = [f"Operator symptom note: {symptom}"] if symptom else []
     bundle = build_evidence_bundle(
         incident_id=inc_id,
         config=runtime.config,
         store=store,
         symptom=symptom_summary,
         code_index=code_idx,
-        extra_notes=notes,
+        extra_notes=extra_notes,
     )
     audit = AuditTrail(runtime.state_dir / "audit.jsonl")
     if runtime.no_llm:
@@ -281,6 +212,183 @@ def investigate(
         plan=mitigation_plan,
         ranking_mode=mode,
     )
+    send_notify_webhook(
+        notify_url,
+        {
+            "event": "incident_brief",
+            "incident_id": inc_id,
+            "verdict": verdict.verdict,
+            "recommended": verdict.recommended.model_dump(mode="json"),
+        },
+    )
+    return bundle, verdict, mitigation_plan, mode
+
+
+@app.callback()
+def main(
+    ctx: typer.Context,
+    config: Annotated[
+        Path,
+        typer.Option("--config", help="Path to flagrewind.yaml configuration file."),
+    ] = Path("flagrewind.yaml"),
+    no_llm: Annotated[
+        bool,
+        typer.Option("--no-llm", help="Force deterministic rules-only ranking (skip LLM)."),
+    ] = False,
+) -> None:
+    """Load and validate configuration before running any subcommand."""
+    console = _make_console()
+    try:
+        loaded = load_config(config)
+    except ConfigError as exc:
+        console.print(f"[red]Configuration error:[/red] {exc}")
+        raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from exc
+
+    ctx.obj = RuntimeContext(
+        config_path=config,
+        config=loaded,
+        state_dir=state_dir_for(config),
+        no_llm=no_llm,
+        console=console,
+    )
+
+
+@app.command()
+def doctor(ctx: typer.Context) -> None:
+    """Verify Flagsmith API, key, environments, journal, webhook port, and LLM access."""
+    runtime = _require_ctx(ctx)
+    ok, _ = run_doctor(runtime.config, runtime.state_dir, console=runtime.console)
+    if not ok:
+        raise typer.Exit(code=int(ExitCode.REMOTE_UNREACHABLE))
+
+
+@app.command()
+def journal(
+    ctx: typer.Context,
+    host: Annotated[str, typer.Option("--host", help="Webhook server bind host.")] = "0.0.0.0",
+) -> None:
+    """Run the Flagsmith webhook receiver and audit-log poller."""
+    runtime = _require_ctx(ctx)
+    store = JournalStore(
+        runtime.state_dir / "journal.jsonl",
+        runtime.state_dir / "journal_heartbeat.json",
+    )
+    secret = resolve_env(runtime.config.journal.webhook_secret_env) or ""
+    webhook_app = create_webhook_app(store, secret=secret)
+
+    stop_event = threading.Event()
+    fs_client = _build_flagsmith_from_config(runtime.config)
+
+    def _poll_loop() -> None:
+        if fs_client is None:
+            return
+        with fs_client:
+            poller = AuditPoller(fs_client, store)
+            while not stop_event.is_set():
+                try:
+                    poller.poll_once()
+                except FlagsmithError as exc:
+                    runtime.console.print(f"Audit poll warning: {exc}")
+                stop_event.wait(runtime.config.journal.audit_poll_seconds)
+
+    poller_thread = threading.Thread(target=_poll_loop, daemon=True)
+    poller_thread.start()
+    runtime.console.print(
+        f"FlagRewind journal listening on http://{host}:{runtime.config.journal.webhook_port} "
+        f"(audit poll every {runtime.config.journal.audit_poll_seconds}s)"
+    )
+    try:
+        uvicorn.run(
+            webhook_app,
+            host=host,
+            port=runtime.config.journal.webhook_port,
+            log_level="warning",
+        )
+    finally:
+        stop_event.set()
+        poller_thread.join(timeout=2.0)
+
+
+@app.command()
+def watch(
+    ctx: typer.Context,
+    interval: Annotated[float, typer.Option("--interval", help="Polling interval seconds.")] = 5.0,
+    once: Annotated[bool, typer.Option("--once", help="Stop after opening one incident.")] = True,
+    max_polls: Annotated[
+        int, typer.Option("--max-polls", min=0, help="0=unlimited, >0 stops after N polls.")
+    ] = 0,
+    notify_url: Annotated[
+        str | None,
+        typer.Option("--notify-url", help="Optional generic webhook URL for JSON status POST."),
+    ] = None,
+) -> None:
+    """Poll symptom metrics and open read-only investigations on threshold breach."""
+    runtime = _require_ctx(ctx)
+    polls = 0
+    runtime.console.print(
+        f"Watching {runtime.config.symptoms.demo_url} "
+        f"(threshold={runtime.config.symptoms.error_rate_threshold:.2%})..."
+    )
+    try:
+        with DemoSymptomReader(runtime.config.symptoms) as reader:
+            while max_polls == 0 or polls < max_polls:
+                polls += 1
+                summary = reader.fetch()
+                if summary.breached:
+                    _run_investigation(runtime, symptom_summary=summary, notify_url=notify_url)
+                    if once:
+                        return
+                if max_polls == 0 or polls < max_polls:
+                    time.sleep(interval)
+    except SymptomError as exc:
+        runtime.console.print(f"Symptom source error: {exc}")
+        raise typer.Exit(code=int(ExitCode.REMOTE_UNREACHABLE)) from exc
+
+
+@app.command()
+def investigate(
+    ctx: typer.Context,
+    since: Annotated[str, typer.Option("--since", help="Lookback window, e.g. 30m.")] = "30m",
+    symptom: Annotated[
+        str | None, typer.Option("--symptom", help="Optional symptom description.")
+    ] = None,
+    notify_url: Annotated[
+        str | None,
+        typer.Option("--notify-url", help="Optional generic webhook URL for JSON status POST."),
+    ] = None,
+) -> None:
+    """Gather evidence, rank suspects, build dry-run plan, and render one-screen brief."""
+    runtime = _require_ctx(ctx)
+    try:
+        since_min = _parse_since_minutes(since)
+    except ConfigError as exc:
+        runtime.console.print(str(exc))
+        raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from exc
+
+    try:
+        with DemoSymptomReader(runtime.config.symptoms) as reader:
+            symptom_summary = reader.fetch()
+    except SymptomError as exc:
+        if not symptom:
+            runtime.console.print(f"Symptom source error: {exc}")
+            raise typer.Exit(code=int(ExitCode.REMOTE_UNREACHABLE)) from exc
+        now_dt = datetime.now(UTC)
+        symptom_summary = SymptomSummary(
+            onset=now_dt - timedelta(minutes=min(since_min, 5)),
+            breached=True,
+            baseline=0.0,
+            current=runtime.config.symptoms.error_rate_threshold,
+            by_dimension=DimensionBreakdown(),
+            error_samples=[],
+        )
+
+    notes = [f"Operator symptom note: {symptom}"] if symptom else []
+    _run_investigation(
+        runtime,
+        symptom_summary=symptom_summary,
+        extra_notes=notes,
+        notify_url=notify_url,
+    )
 
 
 @app.command()
@@ -310,7 +418,6 @@ def apply(
 ) -> None:
     """Require typed human approval, execute inverse on Flagsmith, verify recovery, and report."""
     runtime = _require_ctx(ctx)
-    _ = notify_url
     try:
         bundle, verdict, loaded_plan, mode = _load_saved_incident(runtime.state_dir, incident_id)
     except ConfigError as exc:
@@ -375,6 +482,16 @@ def apply(
                 incident_id=incident_id,
                 details=exec_result.model_dump(mode="json"),
             )
+            (incident_dir(runtime.state_dir, incident_id) / "execution.json").write_text(
+                json.dumps(
+                    {
+                        "option_n": option,
+                        "execution": exec_result.model_dump(mode="json"),
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
             verify_result = verify_mitigation(
                 client=fs_client,
                 symptom_reader=symptom_reader,
@@ -406,11 +523,30 @@ def apply(
         execution=exec_result,
         verification=verify_result,
     )
+    send_notify_webhook(
+        notify_url,
+        {
+            "event": "mitigation_applied",
+            "incident_id": incident_id,
+            "option_n": option,
+            "recovered": verify_result.recovered,
+        },
+    )
     runtime.console.print(
         f"Applied option {option} | state_verified={verify_result.state_verified} "
         f"| recovered={verify_result.recovered} | report={md_path}"
     )
     if not verify_result.recovered:
+        next_opt = next((o for o in loaded_plan.options if o.n > option), None)
+        next_hint = (
+            f" or try 'flagrewind apply {incident_id} --option {next_opt.n}'."
+            if next_opt
+            else "."
+        )
+        runtime.console.print(
+            f"Recovery not confirmed. Run 'flagrewind undo {incident_id}' to restore state"
+            + next_hint
+        )
         raise typer.Exit(code=int(ExitCode.UNRESOLVED_OR_REJECTED))
 
 
@@ -421,7 +557,79 @@ def undo(
 ) -> None:
     """Restore pre-mitigation Flagsmith state (requires fresh typed approval)."""
     runtime = _require_ctx(ctx)
-    runtime.console.print(f"Undo gate prepared for {incident_id}.")
+    exec_file = incident_dir(runtime.state_dir, incident_id) / "execution.json"
+    if not exec_file.exists():
+        runtime.console.print(f"No prior execution recorded for {incident_id}.")
+        raise typer.Exit(code=int(ExitCode.CONFIG_ERROR))
+
+    try:
+        _, _, loaded_plan, _ = _load_saved_incident(runtime.state_dir, incident_id)
+    except ConfigError as exc:
+        runtime.console.print(str(exc))
+        raise typer.Exit(code=int(ExitCode.CONFIG_ERROR)) from exc
+
+    exec_data = json.loads(exec_file.read_text(encoding="utf-8"))
+    applied_opt_n = int(exec_data.get("option_n", 1))
+    applied_opt = next((o for o in loaded_plan.options if o.n == applied_opt_n), None)
+    if applied_opt is None or not applied_opt.inverse_operations:
+        runtime.console.print(f"No inverse operation available to undo {incident_id}.")
+        raise typer.Exit(code=int(ExitCode.CONFIG_ERROR))
+
+    undo_opt = applied_opt.model_copy(
+        update={
+            "operations": applied_opt.inverse_operations,
+            "precondition": applied_opt.operations[-1].body,
+        }
+    )
+    undo_plan = loaded_plan.model_copy(
+        update={
+            "options": [
+                undo_opt if o.n == applied_opt_n else o for o in loaded_plan.options
+            ]
+        }
+    )
+    approval = request_approval(
+        undo_plan,
+        undo_opt,
+        state_dir=runtime.state_dir,
+        expected_phrase=expected_undo_phrase(undo_plan.plan_id),
+    )
+    audit = AuditTrail(runtime.state_dir / "audit.jsonl")
+    audit.log(
+        "undo_approval" if approval.approved else "undo_rejection",
+        incident_id=incident_id,
+        details=approval.model_dump(mode="json"),
+    )
+    if not approval.approved:
+        runtime.console.print("Undo approval denied. Flagsmith state unchanged.")
+        raise typer.Exit(code=int(ExitCode.UNRESOLVED_OR_REJECTED))
+
+    fs_client = _build_flagsmith_from_config(runtime.config)
+    if fs_client is None:
+        runtime.console.print(f"Missing {runtime.config.flagsmith.admin_key_env}.")
+        raise typer.Exit(code=int(ExitCode.REMOTE_UNREACHABLE))
+
+    try:
+        with fs_client:
+            res: ExecutionResult = execute_option(
+                client=fs_client,
+                config=runtime.config,
+                plan=undo_plan,
+                option=undo_opt,
+                approval=approval,
+            )
+            audit.log("undo_execute", incident_id=incident_id, details=res.model_dump(mode="json"))
+    except PreconditionDriftError as exc:
+        runtime.console.print(f"Undo precondition failed: {exc}")
+        raise typer.Exit(code=int(ExitCode.PRECONDITION_FAILED)) from exc
+    except FlagsmithAuthOrReachabilityError as exc:
+        runtime.console.print(f"Flagsmith error: {exc}")
+        raise typer.Exit(code=int(ExitCode.REMOTE_UNREACHABLE)) from exc
+    except ExecutorError as exc:
+        runtime.console.print(f"Undo blocked: {exc}")
+        raise typer.Exit(code=int(ExitCode.INTERNAL_ERROR)) from exc
+
+    runtime.console.print(f"Undo applied for {incident_id} (restored pre-mitigation state).")
 
 
 @app.command()

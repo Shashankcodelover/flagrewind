@@ -14,6 +14,7 @@ from rich.table import Table
 from flagrewind.config import FlagRewindConfig, resolve_env
 from flagrewind.flagsmith_client import FlagsmithClient, FlagsmithError
 from flagrewind.llm_client import OpenAICompatibleLLMClient
+from flagrewind.mcp_reader import FlagsmithMCPReader, MCPReadOnlyError
 
 
 def _port_open(port: int) -> bool:
@@ -155,6 +156,35 @@ def run_doctor(
 
     if mcp_checker is not None:
         checks.append(mcp_checker())
+    else:
+        mcp_reader = FlagsmithMCPReader.from_env(config.flagsmith.admin_key_env)
+        if mcp_reader is None:
+            checks.append(
+                {
+                    "check": "mcp_read_only",
+                    "status": "WARN",
+                    "detail": "FLAGSMITH_MCP_URL unset (P1 optional)",
+                }
+            )
+        else:
+            with mcp_reader:
+                try:
+                    tools = mcp_reader.list_tools()
+                    checks.append(
+                        {
+                            "check": "mcp_read_only",
+                            "status": "PASS",
+                            "detail": f"{len(tools)} read tools: {', '.join(tools[:4])}",
+                        }
+                    )
+                except MCPReadOnlyError as exc:
+                    checks.append(
+                        {
+                            "check": "mcp_read_only",
+                            "status": "WARN",
+                            "detail": str(exc)[:72],
+                        }
+                    )
 
     report = {
         "checked_at": datetime.now(UTC).isoformat(),
