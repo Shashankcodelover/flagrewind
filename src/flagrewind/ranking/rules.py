@@ -96,7 +96,12 @@ def rank_with_rules(
             ],
         )
 
-    if top.rules_score < 0.35:
+    if top.rules_score < 0.35 or (
+        bundle.error_samples
+        and top.features.code == 0.0
+        and top.kind != "segment_rule"
+        and top.rules_score < confidence_floor
+    ):
         return RankingVerdict(
             verdict="not_flag_related",
             ranking=ranked,
@@ -104,7 +109,7 @@ def rank_with_rules(
                 action="none",
                 change_id=None,
                 why=(
-                    f"Top change '{top.feature}' scored {top.rules_score:.2f}; "
+                    f"Top change '{top.feature}' has no code match (score={top.rules_score:.2f}); "
                     "fault looks non-flag."
                 ),
             ),

@@ -243,6 +243,9 @@ def test_all_10_scenarios_rules_pipeline_and_scorer(tmp_path: Path) -> None:
     summary = score_runs(runs, truth)
     rules_metrics = summary["by_mode"]["rules-only"]
     assert summary["synthetic"] is True
+    assert rules_metrics["top1_accuracy"] == 1.0
     assert rules_metrics["abstention_accuracy"] == 1.0
-    assert rules_metrics["top3_accuracy"] >= 0.9
+    assert rules_metrics["action_correctness"] == 1.0
     assert rules_metrics["unapproved_writes"] == 0
+    for run in runs:
+        assert run.verdict == truth[run.scenario_id]["expected_verdict"]

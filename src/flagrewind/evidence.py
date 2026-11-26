@@ -118,6 +118,10 @@ def _compute_code_score(
 
     if code_index.matches_error_frames(event.feature, samples):
         return 0.75
+
+    # Segment rule edits (S10) affect flags gated by that segment; score when eu/free errors align.
+    if event.kind == "segment_rule" and _compute_scope_score(event, symptom) >= 0.75:
+        return 0.75
     return 0.0
 
 
