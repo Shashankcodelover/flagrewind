@@ -28,7 +28,9 @@ from flagrewind.evidence import EvidenceBundle, build_evidence_bundle
 from flagrewind.executor import ExecutorError, PreconditionDriftError, execute_option
 from flagrewind.flagsmith_client import FlagsmithAuthOrReachabilityError, FlagsmithClient
 from flagrewind.journal.store import JournalStore
+from flagrewind.llm_client import OpenAICompatibleLLMClient
 from flagrewind.planner import MitigationPlan, build_mitigation_plan
+from flagrewind.ranking.llm import rank_with_llm
 from flagrewind.ranking.rules import rank_with_rules
 from flagrewind.ranking.schema import RankingVerdict
 from flagrewind.report import (
@@ -230,8 +232,20 @@ def investigate(
         code_index=code_idx,
         extra_notes=notes,
     )
-    verdict = rank_with_rules(bundle, confidence_floor=runtime.config.policy.confidence_floor)
-    mode = "rules-only"
+    audit = AuditTrail(runtime.state_dir / "audit.jsonl")
+    if runtime.no_llm:
+        verdict = rank_with_rules(bundle, confidence_floor=runtime.config.policy.confidence_floor)
+        mode = "rules-only"
+        llm_meta: dict[str, object] = {"calls": 0, "tokens": None, "model": None}
+    else:
+        llm_client = OpenAICompatibleLLMClient.from_config(runtime.config.llm)
+        verdict, mode, llm_meta = rank_with_llm(
+            bundle,
+            config=runtime.config,
+            llm_client=llm_client,
+            audit_trail=audit,
+        )
+
     events = store.read_all()
     mitigation_plan = build_mitigation_plan(
         incident_id=inc_id,
@@ -253,8 +267,9 @@ def investigate(
         verdict=verdict,
         plan=mitigation_plan,
         ranking_mode=mode,
+        llm_meta=llm_meta,
     )
-    AuditTrail(runtime.state_dir / "audit.jsonl").log(
+    audit.log(
         "investigate",
         incident_id=inc_id,
         details={"mode": mode, "verdict": verdict.verdict, "candidates": len(bundle.candidates)},

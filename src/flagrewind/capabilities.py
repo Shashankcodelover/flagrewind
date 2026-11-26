@@ -13,6 +13,7 @@ from rich.table import Table
 
 from flagrewind.config import FlagRewindConfig, resolve_env
 from flagrewind.flagsmith_client import FlagsmithClient, FlagsmithError
+from flagrewind.llm_client import OpenAICompatibleLLMClient
 
 
 def _port_open(port: int) -> bool:
@@ -133,14 +134,24 @@ def run_doctor(
         llm_status = llm_checker()
         checks.append(llm_status)
     else:
-        has_llm = bool(resolve_env(config.llm.model_env) and resolve_env(config.llm.base_url_env))
-        checks.append(
-            {
-                "check": "llm",
-                "status": "PASS" if has_llm else "WARN",
-                "detail": "Env configured" if has_llm else "rules-only (LLM env unset)",
-            }
-        )
+        llm_client = OpenAICompatibleLLMClient.from_config(config.llm)
+        if llm_client is None:
+            checks.append(
+                {
+                    "check": "llm",
+                    "status": "WARN",
+                    "detail": "rules-only (LLM env unset)",
+                }
+            )
+        else:
+            llm_ok, llm_detail = llm_client.smoke_test_schema()
+            checks.append(
+                {
+                    "check": "llm",
+                    "status": "PASS" if llm_ok else "WARN",
+                    "detail": llm_detail if llm_ok else f"rules-only fallback ({llm_detail})",
+                }
+            )
 
     if mcp_checker is not None:
         checks.append(mcp_checker())
