@@ -44,9 +44,12 @@ class FlagsmithClient:
     def __enter__(self) -> FlagsmithClient:
         return self
 
-    def __exit__(self, *_: object) -> None:
+    def close(self) -> None:
         if self._owns_client:
             self._client.close()
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
 
     def _request(
         self,

@@ -24,9 +24,14 @@ def test_cli_missing_config_exits_with_code_2(tmp_path: Path) -> None:
     assert result.exit_code == int(ExitCode.CONFIG_ERROR)
 
 
-def test_cli_no_llm_flag_propagates() -> None:
+def test_cli_no_llm_flag_propagates(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    cfg_path = repo_root / "flagrewind.yaml"
-    result = runner.invoke(app, ["--config", str(cfg_path), "--no-llm", "investigate"])
+    cfg_path = tmp_path / "flagrewind.yaml"
+    cfg_path.write_text(
+        (repo_root / "flagrewind.yaml").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    result = runner.invoke(
+        app, ["--config", str(cfg_path), "--no-llm", "investigate", "--symptom", "unit check"]
+    )
     assert result.exit_code == 0
     assert "rules-only" in result.stdout
