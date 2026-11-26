@@ -1,0 +1,44 @@
+version: 1
+
+flagsmith:
+  api_url_env: FLAGSMITH_API_URL
+  admin_key_env: FLAGREWIND_ADMIN_KEY
+  project: Acme Checkout
+
+environments:
+  production:
+    writable: true
+  staging:
+    writable: false
+
+journal:
+  webhook_port: 8787
+  webhook_secret_env: FLAGREWIND_WEBHOOK_SECRET
+  audit_poll_seconds: 15
+
+symptoms:
+  source: demo
+  demo_url: http://localhost:8001
+  error_rate_threshold: 0.05
+  baseline_window_s: 120
+  detect_window_s: 30
+
+code:
+  paths:
+    - demo_service
+
+llm:
+  base_url_env: LLM_BASE_URL
+  api_key_env: LLM_API_KEY
+  model_env: LLM_MODEL
+  temperature: 0
+  max_calls_per_incident: 3
+  timeout_s: 30
+
+policy:
+  allowed_actions:
+    - revert_change
+    - disable_for_segment
+  confidence_floor: 0.6
+  verify_seconds: 60
+  sdk_refresh_seconds: 5
