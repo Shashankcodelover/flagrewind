@@ -42,3 +42,8 @@ All findings below were verified during M0 Discovery on `2026-11-26` (IST). Noth
   - `get_environment_flags() -> Flags` (`is_feature_enabled`, `get_feature_value`)
 - **Verified (MCP Server P1):** `flagsmith/flagsmith-mcp` supports `FLAGSMITH_API_TOKEN` + `FLAGSMITH_API_URL`, exposing core read/list tools for features, environments, segments, segment overrides, and metrics.
 - **Source:** `inspect.signature` on `.venv` `flagsmith==4.0.1` and `docs.flagsmith.com` (`2026-11-26`).
+
+## D08 — Flagsmith Pinned Image & Server-Side SDK Key Endpoint
+- **Verified:** Latest stable Flagsmith release tag on GitHub is `v2.295.2` (published `2026-11-23`). Pinned `docker.flagsmith.com/flagsmith/flagsmith:v2.295.2` in `docker/docker-compose.yml` with `EXPERIMENTATION_ENABLED="false"` and `flagsmith-task-processor` moved to host port `8002:8000` so `demo_service` retains port `8001`.
+- **Verified:** Server-side SDK keys (`ser.*`) are provisioned via `POST /api/v1/environments/{environment_api_key}/api-keys/` and only returned once on creation.
+- **Source:** `api.github.com/repos/Flagsmith/flagsmith/releases/latest`, `raw.githubusercontent.com/.../v2.295.2/docker-compose.yml`, and `docs.flagsmith.com` (`2026-11-26`).

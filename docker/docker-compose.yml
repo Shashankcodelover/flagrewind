@@ -1,0 +1,83 @@
+# Derived from Flagsmith's official docker-compose.yml (v2.295.2),
+# Copyright Flagsmith Ltd., licensed under BSD-3-Clause:
+# https://github.com/Flagsmith/flagsmith/blob/v2.295.2/docker-compose.yml
+#
+# Modifications for FlagRewind demo world:
+# - Pinned Flagsmith image to v2.295.2 (no :latest)
+# - Disabled experimentation flags/services (EXPERIMENTATION_ENABLED=false)
+# - Remapped flagsmith-task-processor host port from 8001 to 8002 so demo_service keeps 8001
+# - Added host.docker.internal:host-gateway for Linux/Windows webhook delivery to port 8787
+
+x-flagsmith-env: &flagsmith-env
+  DATABASE_URL: postgresql://postgres:password@postgres:5432/flagsmith
+  USE_POSTGRES_FOR_ANALYTICS: "true"
+  ENVIRONMENT: production
+  DJANGO_ALLOWED_HOSTS: "*"
+  FLAGSMITH_DOMAIN: localhost:8000
+  DJANGO_SECRET_KEY: flagrewind-local-demo-secret-change-in-prod
+  WAREHOUSE_CREDENTIALS_SECRET: flagrewind-local-warehouse-secret
+  TASK_RUN_METHOD: TASK_PROCESSOR
+  PROMETHEUS_ENABLED: "false"
+  EXPERIMENTATION_ENABLED: "false"
+
+volumes:
+  pgdata:
+
+services:
+  postgres:
+    image: postgres:15.5-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: flagsmith
+    container_name: flagrewind_flagsmith_postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d flagsmith -U postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 20s
+
+  migrate-db:
+    image: docker.flagsmith.com/flagsmith/flagsmith:v2.295.2
+    command:
+      - migrate
+    environment:
+      <<: *flagsmith-env
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  flagsmith:
+    image: docker.flagsmith.com/flagsmith/flagsmith:v2.295.2
+    restart: unless-stopped
+    command:
+      - serve
+    environment:
+      <<: *flagsmith-env
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      migrate-db:
+        condition: service_completed_successfully
+
+  flagsmith-task-processor:
+    image: docker.flagsmith.com/flagsmith/flagsmith:v2.295.2
+    restart: unless-stopped
+    command:
+      - run-task-processor
+    environment:
+      <<: *flagsmith-env
+    ports:
+      - "8002:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      migrate-db:
+        condition: service_completed_successfully
