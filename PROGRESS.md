@@ -1,24 +1,24 @@
 # FlagRewind — Progress Log
 
 ## Current Status
-- **Active Milestone:** M0 Discovery & Planning (Research + Plan complete; awaiting plan approval & Docker/LLM confirmation before coding)
+- **Completed Modules:** Modules 0–9 (Full FlagRewind P0 + P1 codebase, Acme Checkout demo service, pinned Flagsmith Docker stack & bootstrap, 10-scenario synthetic drill suite, CI workflows, and documentation)
 - **Target Workspace:** `d:\users\Shashank J\Desktop\track 2\flagrewind`
-- **GitHub Scope:** `Shashankcodelover` (isolated from other account)
+- **GitHub Scope:** `Shashankcodelover` (configured `--local` inside `flagrewind` only)
 
-## Completed in M0
-1. Saved canonical Master Brief to `d:\users\Shashank J\Desktop\track 2\TASK_BRIEF.md`.
-2. Audited local host environment:
-   - `Windows_NT 10.0.26300`, 16 CPUs, `45.9%` RAM used (`8.79/16.23 GB` free), `282.82 GB` free on `D:`.
-   - Ports `8000`, `8001`, `8787` verified free.
-   - `git 2.52.0`, `Python 3.11.9`, `uv`, `Docker 29.4.3`, `Docker Compose v5.1.3` installed.
-   - Global Python already has `fastapi 0.115.0`, `httpx 0.28.1`, `openai 2.28.0`, `pydantic 2.12.5`, `rich 14.2.0`, `typer 0.24.1`, `uvicorn 0.30.6`; still need isolated `.venv` + `flagsmith`, `pytest`, `respx`, `ruff`, `pyyaml`.
-3. Re-verified official WeMakeDevs Toggle Wars Track 02 rules, Flagsmith Admin API (`/featurestates/`, `/feature-segments/`, `/audit/`), `FLAG_UPDATED` HMAC webhook format, Python SDK local-evaluation signature, upstream `docker-compose.yml` (`8001` collision spotted), and `flagrewind` name availability on PyPI & GitHub.
-4. Authored `PROJECT_SPEC.md`, `IMPLEMENTATION_PLAN.md`, `DECISIONS.md`, `PROGRESS.md`, and `.agent/plan.md`.
+## Milestone Summary
+- **Module 1 (`chore/init-foundation`):** Repo setup, Apache-2.0 `LICENSE`, `.env.example`, `pyproject.toml`, strict `config.py`, `cli.py`, isolated `.venv`.
+- **Module 2 (`feat/flagsmith-stack`):** Pinned `docker/docker-compose.yml` (`v2.295.2`, `8002:8000` for task-processor so `demo_service` keeps `8001`), idempotent `scripts/bootstrap.py`, `docs/fault-model.md`, `docs/autonomy-contract.md`.
+- **Module 3 (`feat/demo-service`):** FastAPI `"Acme Checkout"` (`demo_service/{app.py, faults.py, traffic.py}`).
+- **Module 4 (`feat/journal-evidence`):** `flagsmith_client.py`, HMAC webhook receiver, audit poller with gap detection, symptom reader, AST `codeindex.py`, `evidence.py`.
+- **Module 5 (`feat/core-mitigation-loop`):** `rules.py`, `planner.py`, `approval.py`, `executor.py` (`exit 5` on drift, allowlists, never `DELETE`), `verifier.py`, `report.py`, `audit.py`, `capabilities.py` (`doctor`), safety test (`0` unapproved writes).
+- **Module 6 (`feat/llm-ranking`):** `llm_client.py`, untrusted-data `prompts.py`, validated `ranking/llm.py` with 1 repair retry and labelled fallbacks.
+- **Module 7 (`feat/watch-undo-mcp`):** `journal`, `watch`, `undo`, next-suspect flow, P1 read-only `mcp_reader.py`, `notifier.py`, integration suite.
+- **Module 8 (`feat/drills-benchmark`):** Frozen 10-scenario `drills/scenarios.yaml`, isolated `answers/ground_truth.json`, `runner.py`, `score.py`, `docs/benchmark.md`.
+- **Module 9 (`docs/ci-and-release`):** GitHub Actions CI (pinned actions, least privilege, Gitleaks, CodeQL), PR/issue templates, `README.md`, `WALKTHROUGH.md`, `DEMO_SCRIPT.md`, `TEST_REPORT.md`, ADR-0001.
 
-## Blockers / Human Actions Needed
-1. **Plan Approval (Global `PLAN FIRST` rule for LARGE tasks):** Confirm approval of `IMPLEMENTATION_PLAN.md` to start Module 1–9 implementation.
-2. **Docker Desktop (for M1/M2 live stack):** Docker Desktop daemon is currently stopped (`pipe/dockerDesktopLinuxEngine` not found). Start Docker Desktop when ready for live Flagsmith tests (coding Modules 1, 3, 4, 5, 6, 7, 8, 9 can proceed cleanly with `.venv` + `respx` unit tests even before Docker starts).
-3. **LLM Access (for M3 live model runs):** `GEMINI_API_KEY` / `LLM_API_KEY` unset and `ollama` not installed. Choose Gemini free-tier AI Studio key, local Ollama, or `--no-llm` rules-only baseline first.
-
-## Next Action
-- On plan approval, begin **Module 1** (`chore/init-foundation`): initialize git repo with `--local` `Shashankcodelover`, project hygiene files, strict `config.py`, `cli.py` skeleton, isolated `.venv`, and initial unit tests.
+## Remaining Human-Only Actions (For Live M1/M2/M5/M6 & Submission)
+1. Start **Docker Desktop** on Windows and run `docker compose -f docker/docker-compose.yml up -d`.
+2. Open `http://localhost:8000`, complete Flagsmith `"Get Started"`, create organisation `"FlagRewind Demo"`, and create two Org API keys (`FLAGREWIND_ADMIN_KEY` and `FLAGREWIND_DRILL_KEY`).
+3. Create a free Google AI Studio key (`LLM_API_KEY`) or install Ollama locally (`LLM_MODEL`).
+4. Run `python scripts/bootstrap.py` and copy `.env.example` -> `.env` with the keys.
+5. Run live `10 x 3` drills + timed B1 manual baseline (`docs/benchmark.md`), approve creating public repo `Shashankcodelover/flagrewind` & `git push`, record <= 3 min video (`DEMO_SCRIPT.md`), and submit before `29 Nov 2026, 20:00 IST`.
