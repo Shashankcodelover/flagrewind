@@ -109,9 +109,44 @@ def _scenario_symptoms(scenario_id: str, onset: datetime, repo_root: Path) -> tu
             "IT",
             "pro",
             "apply_tax_engine",
+            "faults.py",
+        ),
+        "H01": (
+            "KeyError",
+            "Missing pro_badge in profile_v2",
+            "US",
+            "free",
+            "render_profile",
+            "faults.py",
+        ),
+        "H02": (
+            "MemoryExhaustionError",
+            "Host memory exhaustion in external service",
+            "US",
+            "pro",
+            "apply_external_host_check",
+            "external_infra.py",
+        ),
+        "H03": (
+            "PaymentTimeoutError",
+            "Timed out at payment_timeout_ms=150",
+            "US",
+            "pro",
+            "check_payment_timeout",
+            "faults.py",
+        ),
+        "H04": (
+            "PaymentGatewayError",
+            "payment_provider=broken_gateway rejected",
+            "US",
+            "pro",
+            "charge_payment_provider",
+            "faults.py",
         ),
     }
-    err_type, msg, cc, plan, fn = fault_map[scenario_id]
+    item = fault_map[scenario_id]
+    err_type, msg, cc, plan, fn = item[0], item[1], item[2], item[3], item[4]
+    frame_file = item[5] if len(item) > 5 else "faults.py"
     breach_win = {
         "window_start": onset.isoformat(),
         "epoch_s": int(onset.timestamp()),
@@ -135,7 +170,7 @@ def _scenario_symptoms(scenario_id: str, onset: datetime, repo_root: Path) -> tu
                 "message": msg,
                 "frames": [
                     {
-                        "file": str(repo_root / "demo_service" / "faults.py"),
+                        "file": str(repo_root / "demo_service" / frame_file),
                         "line": 63,
                         "function": fn,
                     }
@@ -152,9 +187,16 @@ def run_ablation(repo_root: Path, out_path: Path) -> dict[str, Any]:
     cfg = load_config(repo_root / "flagrewind.yaml")
     code_idx = CodeIndex.build(repo_root, cfg.code.paths)
     scenarios = load_scenarios(repo_root / "drills" / "scenarios.yaml")
+    heldout_path = repo_root / "drills" / "heldout.yaml"
+    if heldout_path.exists():
+        scenarios.extend(load_scenarios(heldout_path))
+
     truth = json.loads((repo_root / "drills" / "answers" / "ground_truth.json").read_text())[
         "scenarios"
     ]
+    heldout_truth_path = repo_root / "drills" / "answers" / "ground_truth_heldout.json"
+    if heldout_truth_path.exists():
+        truth.update(json.loads(heldout_truth_path.read_text())["scenarios"])
     llm_client = OpenAICompatibleLLMClient.from_config(cfg.llm)
     if llm_client is None:
         raise RuntimeError("LLM env vars not configured; cannot run live LLM ablation.")
