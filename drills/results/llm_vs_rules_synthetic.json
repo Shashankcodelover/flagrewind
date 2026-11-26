@@ -1,0 +1,397 @@
+{
+  "synthetic": true,
+  "by_mode": {
+    "llm (gemini-flash-latest)": {
+      "runs": 1,
+      "top1_accuracy": 1.0,
+      "top3_accuracy": 1.0,
+      "abstention_accuracy": 1.0,
+      "action_correctness": 1.0,
+      "median_time_to_mitigation_s": 26.23,
+      "median_time_to_recovery_s": null,
+      "mean_llm_calls": 1,
+      "mean_tokens": 1693,
+      "unapproved_writes": 0
+    },
+    "rules-only": {
+      "runs": 10,
+      "top1_accuracy": 1.0,
+      "top3_accuracy": 1.0,
+      "abstention_accuracy": 1.0,
+      "action_correctness": 1.0,
+      "median_time_to_mitigation_s": 0.0,
+      "median_time_to_recovery_s": null,
+      "mean_llm_calls": 0,
+      "mean_tokens": null,
+      "unapproved_writes": 0
+    },
+    "rules-only (LLM output rejected)": {
+      "runs": 1,
+      "top1_accuracy": 1.0,
+      "top3_accuracy": 1.0,
+      "abstention_accuracy": 1.0,
+      "action_correctness": 1.0,
+      "median_time_to_mitigation_s": 49.45,
+      "median_time_to_recovery_s": null,
+      "mean_llm_calls": 2,
+      "mean_tokens": 3636,
+      "unapproved_writes": 0
+    },
+    "rules-only (LLM unavailable)": {
+      "runs": 8,
+      "top1_accuracy": 1.0,
+      "top3_accuracy": 1.0,
+      "abstention_accuracy": 1.0,
+      "action_correctness": 1.0,
+      "median_time_to_mitigation_s": 0.38,
+      "median_time_to_recovery_s": null,
+      "mean_llm_calls": 1,
+      "mean_tokens": null,
+      "unapproved_writes": 0
+    }
+  },
+  "raw_runs": [
+    {
+      "scenario_id": "S01",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "tax_engine_v2",
+        "dark_mode"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 0.0,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S01",
+      "mode": "rules-only (LLM unavailable)",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "tax_engine_v2",
+        "dark_mode"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 5.703,
+      "time_to_recovery_s": null,
+      "llm_calls": 1,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S02",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "payment_timeout_ms",
+        "checkout_layout"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 0.0,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S02",
+      "mode": "rules-only (LLM unavailable)",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "payment_timeout_ms",
+        "checkout_layout"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 60.235,
+      "time_to_recovery_s": null,
+      "llm_calls": 1,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S03",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "profile_v2",
+        "dark_mode",
+        "export_csv",
+        "checkout_layout",
+        "dark_mode"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 0.0,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S03",
+      "mode": "rules-only (LLM output rejected)",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "profile_v2",
+        "dark_mode",
+        "export_csv",
+        "checkout_layout",
+        "dark_mode"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 49.453,
+      "time_to_recovery_s": null,
+      "llm_calls": 2,
+      "tokens": 3636,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S04",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "tax_engine_v2",
+        "checkout_layout"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 0.0,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S04",
+      "mode": "llm (gemini-flash-latest)",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "tax_engine_v2",
+        "checkout_layout"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 26.235,
+      "time_to_recovery_s": null,
+      "llm_calls": 1,
+      "tokens": 1693,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S05",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "tax_engine_v2",
+        "dark_mode"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 0.0,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S05",
+      "mode": "rules-only (LLM unavailable)",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "tax_engine_v2",
+        "dark_mode"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 0.375,
+      "time_to_recovery_s": null,
+      "llm_calls": 1,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S06",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "not_flag_related",
+      "ranked_features": [
+        "tax_engine_v2"
+      ],
+      "recommended_action": "none",
+      "time_to_mitigation_s": 0.0,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S06",
+      "mode": "rules-only (LLM unavailable)",
+      "seed": 42,
+      "verdict": "not_flag_related",
+      "ranked_features": [
+        "tax_engine_v2"
+      ],
+      "recommended_action": "none",
+      "time_to_mitigation_s": 0.359,
+      "time_to_recovery_s": null,
+      "llm_calls": 1,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S07",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "not_flag_related",
+      "ranked_features": [
+        "dark_mode"
+      ],
+      "recommended_action": "none",
+      "time_to_mitigation_s": 0.0,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S07",
+      "mode": "rules-only (LLM unavailable)",
+      "seed": 42,
+      "verdict": "not_flag_related",
+      "ranked_features": [
+        "dark_mode"
+      ],
+      "recommended_action": "none",
+      "time_to_mitigation_s": 1.125,
+      "time_to_recovery_s": null,
+      "llm_calls": 1,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S08",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "payment_provider",
+        "export_csv"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 0.0,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S08",
+      "mode": "rules-only (LLM unavailable)",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "payment_provider",
+        "export_csv"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 0.359,
+      "time_to_recovery_s": null,
+      "llm_calls": 1,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S09",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "payment_timeout_ms",
+        "maintenance_banner"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 0.0,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S09",
+      "mode": "rules-only (LLM unavailable)",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "payment_timeout_ms",
+        "maintenance_banner"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 0.375,
+      "time_to_recovery_s": null,
+      "llm_calls": 1,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S10",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "eu-customers"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 0.0,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S10",
+      "mode": "rules-only (LLM unavailable)",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "eu-customers"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 0.391,
+      "time_to_recovery_s": null,
+      "llm_calls": 1,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    }
+  ],
+  "live_llm_model": "gemini-flash-latest",
+  "live_flagsmith_docker": false
+}

@@ -9,7 +9,9 @@
 | Check | Command | Result | Scope |
 | --- | --- | --- | --- |
 | Linter | `.venv\Scripts\ruff.exe check .` | **PASS** (`All checks passed!`) | All Python files under `src/`, `demo_service/`, `scripts/`, `drills/`, `tests/` |
-| Unit & Mocked Integration Suite | `.venv\Scripts\pytest.exe` | **PASS** (`29 passed in 20.06s`) | All unit, safety, LLM adversarial, integration, and 10-scenario drill tests |
+| Unit & Mocked Integration Suite | `.venv\Scripts\pytest.exe` | **PASS** (`30 passed in 20.34s`) | All unit, safety, LLM adversarial, web console, integration, and 10-scenario drill tests |
+| Live Gemini Structured Output Smoke Test | `OpenAICompatibleLLMClient.smoke_test_schema()` | **PASS** (`gemini-flash-latest`) | Live OpenAI-compatible schema check against Google AI Studio |
+| Live Gemini vs. Rules Ablation (10 scenarios, synthetic) | `.venv\Scripts\python.exe -m drills.ablation_live` | **PASS** (`drills/results/llm_vs_rules_synthetic.json`) | `rules-only`: `10/10` (`1.0`); live `gemini-flash-latest`: `S04` valid (`1,693` tokens), `S03` rejected->fallback (`3,636` tokens), `8` rate-limited/unavailable->fallback (`1.0` combined accuracy, `0` unapproved writes) |
 | Docker Compose Validation | `docker compose -f docker/docker-compose.yml config --quiet` | **PASS** (`exit 0`) | Validates pinned `v2.295.2` Flagsmith compose file |
 | Drill Runner Dry Run | `.venv\Scripts\python.exe -m drills.runner --dry-run --seed 42` | **PASS** (`exit 0`) | Verified seeded permutation (`S08, S04, S03, S09, S06, S07, S10, S05, S01, S02`) |
 

@@ -62,6 +62,7 @@ from flagrewind.symptoms.demo import (
     SymptomSummary,
 )
 from flagrewind.verifier import verify_mitigation
+from flagrewind.web_console import create_console_app
 
 app = typer.Typer(
     name="flagrewind",
@@ -652,3 +653,16 @@ def report(
         ranking_mode=mode,
     )
     runtime.console.print(f"Wrote reports: {md_path} and {json_path}")
+
+
+@app.command()
+def ui(
+    ctx: typer.Context,
+    host: Annotated[str, typer.Option("--host", help="Bind host for local UI.")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port", help="Bind port for local UI.")] = 8788,
+) -> None:
+    """Launch local Incident Timeline, Blast-Radius Diff & Approval Console."""
+    runtime = _require_ctx(ctx)
+    console_app = create_console_app(runtime.config, runtime.state_dir)
+    runtime.console.print(f"FlagRewind Local Console listening on http://{host}:{port}")
+    uvicorn.run(console_app, host=host, port=port, log_level="warning")

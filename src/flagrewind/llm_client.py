@@ -49,6 +49,7 @@ class OpenAICompatibleLLMClient:
             base_url=base_url,
             api_key=api_key,
             timeout=timeout_s,
+            max_retries=0,
         )
 
     @classmethod

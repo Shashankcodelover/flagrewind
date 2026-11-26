@@ -47,3 +47,7 @@ All findings below were verified during M0 Discovery on `2026-11-26` (IST). Noth
 - **Verified:** Latest stable Flagsmith release tag on GitHub is `v2.295.2` (published `2026-11-23`). Pinned `docker.flagsmith.com/flagsmith/flagsmith:v2.295.2` in `docker/docker-compose.yml` with `EXPERIMENTATION_ENABLED="false"` and `flagsmith-task-processor` moved to host port `8002:8000` so `demo_service` retains port `8001`.
 - **Verified:** Server-side SDK keys (`ser.*`) are provisioned via `POST /api/v1/environments/{environment_api_key}/api-keys/` and only returned once on creation.
 - **Source:** `api.github.com/repos/Flagsmith/flagsmith/releases/latest`, `raw.githubusercontent.com/.../v2.295.2/docker-compose.yml`, and `docs.flagsmith.com` (`2026-11-26`).
+
+## D09 — Verified Gemini OpenAI-Compatible Model ID
+- **Verified:** `OpenAICompatibleLLMClient.smoke_test_schema()` passed against `https://generativelanguage.googleapis.com/v1beta/openai/` using `LLM_MODEL=gemini-flash-latest` (`schema=ok`). `gemini-2.5-flash` and `gemini-2.5-flash-lite` returned HTTP `404` on the OpenAI-compatible chat completions route for this key.
+- **Source:** Live `smoke_test_schema()` check (`2026-11-26`).
