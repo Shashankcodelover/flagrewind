@@ -1,6 +1,6 @@
 # FlagRewind Test & Verification Report
 
-**Generated:** `2026-11-27` · **Mode:** Offline unit + `respx` integration + live Flagsmith Cloud + live Gemini (`gemini-flash-lite-latest`) verified.
+**Generated:** `2026-11-27` · **Mode:** Local verification (`scripts/verify.ps1` -> `docs/verification/latest.md`: **local run; GitHub Actions blocked by an account billing hold**) + live Flagsmith Cloud + live advisory Gemini (`gemini-flash-lite-latest`) verified.
 
 ---
 
@@ -8,15 +8,14 @@
 
 | Check | Command | Result | Scope |
 | --- | --- | --- | --- |
-| Linter | `.venv\Scripts\ruff.exe check .` | **PASS** (`All checks passed!`) | All Python files under `src/`, `demo_service/`, `scripts/`, `drills/`, `tests/` |
-| Unit & Mocked Integration Suite | `.venv\Scripts\pytest.exe` | **PASS** (`33 passed`) | All unit, secret-redaction, safety, LLM adversarial, snapshot-diff fallback, web console, integration, and offline drill tests |
+| Local Verify Script (Ruff + Pytest) | `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1` | **PASS** (`docs/verification/latest.md`: **local run; GitHub Actions blocked by an account billing hold**) | Runs `ruff check .` (`All checks passed!`) and `pytest --tb=short` (`33 passed`) and saves raw output |
 | Live Flagsmith Cloud Doctor | `.venv\Scripts\flagrewind.exe doctor` | **PASS** (`exit 0`) | Live Cloud org (`1 org`), `production` & `staging` envs, audit read, write-scope dry-run, live `gemini-flash-lite-latest` schema check |
-| Live End-to-End Closed-Loop Proof (`S01`) | `.venv\Scripts\python.exe -m drills.live_drill` | **PASS** (`exit 0`, `drills/results/live_e2e_proof.json`) | Live Cloud fault injection via drill key, `AuditPoller` diff capture, Gemini ranking, simulated typed approval, Admin API `PUT` revert, `3` healthy recovery windows (`81.046s`), loopback HMAC webhook proof (`401`/`200`), `0` unapproved writes |
-| Live Flagsmith Cloud 14-Scenario Suite | `.venv\Scripts\python.exe -m drills.live_suite_runner` | **PASS** (`drills/results/live-20261127T022911Z/score_summary.json`) | 10 core (`10/10` top1, `10/10` action) + 4 held-out (`H01`–`H04`, tagged `drills-heldout-v1` prior to run: `4/4` top1, `1.0` abstention, `0` unapproved writes; `S10` `segment_rule` advisory only) |
-| Live Gemini vs. Rules Ablation (14 scenarios, synthetic) | `.venv\Scripts\python.exe -m drills.ablation_live` | **PASS** (`drills/results/llm_vs_rules_synthetic.json`) | `gemini-flash-lite-latest` completed `14/14` with `0` fallbacks (`top1=1.0`, `abstention=1.0`, `action_correctness=0.7857` (`11/14`: chose `disable_for_segment` on `S04`, `S05`, `H01`), `mean_tokens=1397.5`, `4.11s` median latency, `0` unapproved writes) |
+| Live End-to-End Closed-Loop Proof (`n=1`, `S01`) | `.venv\Scripts\python.exe -m drills.live_drill` | **PASS** (`exit 0`, `drills/results/live_e2e_proof.json`) | **`n=1`**: Live Cloud fault injection via drill key, `AuditPoller` diff capture, advisory Gemini ranking, `12.406s` alert->plan, `31.859s` alert->revert applied (simulated phrase), `81.046s` `3` healthy recovery windows, loopback HMAC webhook proof (`401`/`200`), `0` unapproved writes |
+| Live Flagsmith Cloud 14-Scenario Suite (`n=14`) | `.venv\Scripts\python.exe -m drills.live_suite_runner` | **PASS** (`drills/results/live-20261127T022911Z/score_summary.json`) | `10` core (`10/10` top-1, `10/10` action, `1.8s` median) + `4` held-out (`H01`–`H04`, frozen at `drills-heldout-v1` prior to run: `4/4` top-1, `4/4` action, `2.0s` median), `1.0` abstention, `0` unapproved writes (`S10` `segment_rule` manual advisory only) |
+| Live Gemini vs. Rules Ablation (`n=14`, synthetic) | `.venv\Scripts\python.exe -m drills.ablation_live` | **PASS** (`drills/results/llm_vs_rules_synthetic.json`) | **LLM is advisory only**; held-out scenarios frozen at `drills-heldout-v1` before ablation. `gemini-flash-lite-latest` completed `14/14` with `0` fallbacks (`14/14` top-1 = `1.0`, `3/3` abstention = `1.0`, **`11/14` action correctness = `0.7857`** (chose `disable_for_segment` on `S04`, `S05`, `H01`), `mean_tokens=1397.5`, `4.11s` median latency, `0` unapproved writes) |
 | Docker Compose Validation | `docker compose -f docker/docker-compose.yml config --quiet` | **PASS** (`exit 0`) | Validates pinned `v2.295.2` Flagsmith compose file |
 | Drill Runner Dry Run | `.venv\Scripts\python.exe -m drills.runner --dry-run --seed 42` | **PASS** (`exit 0`) | Verified seeded permutation (`S08, S04, S03, S09, S06, S07, S10, S05, S01, S02`) |
-| Manual Triage Baseline (`B1`, `n=3`, indicative) | `.venv\Scripts\python.exe -m drills.manual_stopwatch` | **Pending human run** (`drills/manual_stopwatch.py`) | Script ready to record human `alert -> revert applied` UI stopwatch times (`drills/results/manual_baseline_n3.json`) |
+| Manual Triage Baseline (`B1`, `n=3`, indicative only) | `.venv\Scripts\python.exe -m drills.manual_stopwatch --count 3 --seed 42` | **Pending human run** (`drills/manual_stopwatch.py`) | Same endpoint (`alert -> revert applied`) in Flagsmith UI (`drills/results/manual_baseline_n3.json`); no unrecorded timing claimed |
 
 ---
 
