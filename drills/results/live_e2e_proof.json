@@ -1,0 +1,33 @@
+{
+  "synthetic": true,
+  "live_flagsmith_cloud": true,
+  "scenario_id": "S01",
+  "ranking_mode": "llm (gemini-flash-lite-latest)",
+  "verdict": "flag_change",
+  "top_culprit_feature": "tax_engine_v2",
+  "expected_culprit": "tax_engine_v2",
+  "state_verified": true,
+  "recovered": true,
+  "consecutive_healthy_windows": 3,
+  "observed_error_rates": [
+    0.0831,
+    0.0968,
+    0.07,
+    0.048,
+    0.0,
+    0.0
+  ],
+  "alert_to_plan_s": 12.406,
+  "alert_to_revert_applied_s_automated": 31.859,
+  "alert_to_recovery_s_automated": 81.046,
+  "approval_note": "Simulated typed phrase in automated proof script (no human review wait); manual baseline must time real keystrokes.",
+  "cloud_free_tier_audit_count": 0,
+  "unapproved_writes": 0,
+  "webhook_proof": {
+    "loopback_verified": true,
+    "invalid_hmac_status": 401,
+    "valid_hmac_status": 200,
+    "journal_events_captured": 1,
+    "cloud_note": "Flagsmith Cloud SaaS (api.flagsmith.com) cannot reach private http://host.docker.internal:8787 without a public URL; live Cloud edits are captured via Admin API state-snapshot diff polling."
+  }
+}

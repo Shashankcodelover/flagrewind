@@ -297,6 +297,9 @@ def test_doctor_and_cli_investigate_non_flag(
             ],
         )
     )
+    respx.get(f"{base}projects/10/audit/?page_size=5").mock(
+        return_value=httpx.Response(200, json=[])
+    )
     respx.get(f"{base}audit/?page_size=5&project=10").mock(
         return_value=httpx.Response(200, json=[])
     )
@@ -327,3 +330,30 @@ def test_doctor_and_cli_investigate_non_flag(
     # Non-interactive apply must reject with exit code 1
     apply_res = runner.invoke(app, ["--config", str(cfg_path), "apply", "INC-0001"])
     assert apply_res.exit_code == int(ExitCode.UNRESOLVED_OR_REJECTED)
+
+
+def test_audit_redacts_api_key_prefixes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from flagrewind.audit import AuditTrail, redact_secrets
+
+    monkeypatch.setenv("FLAGREWIND_ADMIN_KEY", "custom_secret_value_12345")
+    sample = (
+        "Headers Api-Key secret123 Bearer tok456 "
+        "sdk ser.abcdef123456 gemini AIzaSy1234567890abcdef "
+        "key AQ.AbcDefGhIjKlMnOpQr env custom_secret_value_12345"
+    )
+    cleaned = redact_secrets(sample)
+    for leaked in (
+        "secret123",
+        "tok456",
+        "ser.abcdef123456",
+        "AIzaSy1234567890abcdef",
+        "AQ.AbcDefGhIjKlMnOpQr",
+        "custom_secret_value_12345",
+    ):
+        assert leaked not in cleaned
+
+    trail = AuditTrail(tmp_path / "audit.jsonl")
+    trail.log("doctor", details={"msg": sample})
+    raw_text = (tmp_path / "audit.jsonl").read_text(encoding="utf-8")
+    assert "ser.abcdef123456" not in raw_text
+    assert "AQ.AbcDefGhIjKlMnOpQr" not in raw_text

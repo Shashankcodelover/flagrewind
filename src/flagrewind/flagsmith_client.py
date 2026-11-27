@@ -22,6 +22,21 @@ def _extract_results(payload: dict[str, Any] | list[Any]) -> list[dict[str, Any]
     return [item for item in results if isinstance(item, dict)] if isinstance(results, list) else []
 
 
+def _normalize_nested_feature_state(state: dict[str, Any]) -> dict[str, Any]:
+    out = dict(state)
+    val = out.get("feature_state_value")
+    if isinstance(val, dict):
+        if val.get("string_value") is not None:
+            out["feature_state_value"] = val["string_value"]
+        elif val.get("integer_value") is not None:
+            out["feature_state_value"] = val["integer_value"]
+        elif val.get("boolean_value") is not None:
+            out["feature_state_value"] = val["boolean_value"]
+        else:
+            out["feature_state_value"] = None
+    return out
+
+
 class FlagsmithClient:
     """Typed HTTP wrapper over Flagsmith /api/v1/ Admin API."""
 
@@ -31,7 +46,7 @@ class FlagsmithClient:
         api_key: str,
         *,
         client: httpx.Client | None = None,
-        timeout_s: float = 15.0,
+        timeout_s: float = 30.0,
     ) -> None:
         self.base_url = base_url.rstrip("/") + "/"
         self._owns_client = client is None
@@ -106,9 +121,22 @@ class FlagsmithClient:
         return _extract_results(self._request("GET", f"environments/{env_api_key}/featurestates/"))
 
     def get_feature_state(self, env_api_key: str, feature_state_id: int) -> dict[str, Any]:
-        res = self._request("GET", f"environments/{env_api_key}/featurestates/{feature_state_id}/")
-        assert isinstance(res, dict)
-        return res
+        try:
+            res = self._request(
+                "GET", f"environments/{env_api_key}/featurestates/{feature_state_id}/"
+            )
+            assert isinstance(res, dict)
+            return res
+        except FlagsmithError as exc:
+            if "(404)" not in str(exc):
+                raise
+            env_obj = self._request("GET", f"environments/{env_api_key}/")
+            assert isinstance(env_obj, dict)
+            env_id = int(env_obj["id"])
+            for st in self.list_feature_all_states(env_id):
+                if int(st["id"]) == feature_state_id:
+                    return _normalize_nested_feature_state(st)
+            raise
 
     def patch_feature_state(
         self,
@@ -117,8 +145,90 @@ class FlagsmithClient:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         """Update an existing feature state (should be invoked only via executor.py)."""
+        try:
+            res = self._request(
+                "PATCH",
+                f"environments/{env_api_key}/featurestates/{feature_state_id}/",
+                json=payload,
+            )
+            assert isinstance(res, dict)
+            return res
+        except FlagsmithError as exc:
+            if "(404)" not in str(exc):
+                raise
+            # Segment overrides on Flagsmith OSS/Cloud live under features/featurestates/{id}/ PUT.
+            env_obj = self._request("GET", f"environments/{env_api_key}/")
+            assert isinstance(env_obj, dict)
+            env_id = int(env_obj["id"])
+            current = next(
+                (
+                    st
+                    for st in self.list_feature_all_states(env_id)
+                    if int(st["id"]) == feature_state_id
+                ),
+                None,
+            )
+            if current is None:
+                raise
+            raw_val = current.get("feature_state_value")
+            if isinstance(raw_val, dict):
+                fsv = dict(raw_val)
+            else:
+                fsv = {
+                    "type": "unicode",
+                    "string_value": str(raw_val) if raw_val is not None else None,
+                    "integer_value": None,
+                    "boolean_value": None,
+                }
+            if "feature_state_value" in payload:
+                nv = payload["feature_state_value"]
+                if isinstance(nv, dict):
+                    fsv = nv
+                elif isinstance(nv, bool):
+                    fsv = {
+                        "type": "bool",
+                        "string_value": None,
+                        "integer_value": None,
+                        "boolean_value": nv,
+                    }
+                elif isinstance(nv, int):
+                    fsv = {
+                        "type": "int",
+                        "string_value": None,
+                        "integer_value": nv,
+                        "boolean_value": None,
+                    }
+                else:
+                    fsv = {
+                        "type": "unicode",
+                        "string_value": str(nv) if nv is not None else None,
+                        "integer_value": None,
+                        "boolean_value": None,
+                    }
+            put_body: dict[str, Any] = {
+                "feature": current["feature"],
+                "environment": current.get("environment") or env_id,
+                "feature_segment": current.get("feature_segment"),
+                "enabled": bool(payload.get("enabled", current.get("enabled", False))),
+                "feature_state_value": fsv,
+            }
+            res = self._request(
+                "PUT",
+                f"features/featurestates/{feature_state_id}/",
+                json=put_body,
+            )
+            assert isinstance(res, dict)
+            return _normalize_nested_feature_state(res)
+
+    def put_feature_state(
+        self,
+        env_api_key: str,
+        feature_state_id: int,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Full update of a feature state (used for multivariate allocations via executor.py)."""
         res = self._request(
-            "PATCH",
+            "PUT",
             f"environments/{env_api_key}/featurestates/{feature_state_id}/",
             json=payload,
         )
@@ -135,6 +245,65 @@ class FlagsmithClient:
         assert isinstance(res, dict)
         return res
 
+    def list_feature_segments(
+        self, environment_id: int, feature_id: int
+    ) -> list[dict[str, Any]]:
+        """List segment bindings for one feature inside one environment."""
+        return _extract_results(
+            self._request(
+                "GET",
+                "features/feature-segments/",
+                params={"environment": environment_id, "feature": feature_id},
+            )
+        )
+
+    def create_feature_segment(
+        self, *, feature_id: int, segment_id: int, environment_id: int
+    ) -> dict[str, Any]:
+        """Create a feature-segment binding in an environment."""
+        res = self._request(
+            "POST",
+            "features/feature-segments/",
+            json={
+                "feature": feature_id,
+                "segment": segment_id,
+                "environment": environment_id,
+            },
+        )
+        assert isinstance(res, dict)
+        return res
+
+    def delete_feature_segment(self, feature_segment_id: int) -> None:
+        """Delete a feature-segment binding (used by drill harness reset)."""
+        self._request("DELETE", f"features/feature-segments/{feature_segment_id}/")
+
+    def list_feature_all_states(
+        self, environment_id: int, feature_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        """List both environment default and segment-override states in one environment."""
+        params: dict[str, Any] = {"environment": environment_id, "page_size": 100}
+        if feature_id is not None:
+            params["feature"] = feature_id
+        return _extract_results(
+            self._request(
+                "GET",
+                "features/featurestates/",
+                params=params,
+            )
+        )
+
+    def patch_segment(
+        self, project_id: int, segment_id: int, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a segment definition (used by drill harness S10)."""
+        res = self._request(
+            "PATCH",
+            f"projects/{project_id}/segments/{segment_id}/",
+            json=payload,
+        )
+        assert isinstance(res, dict)
+        return res
+
     def list_webhooks(self, env_api_key: str) -> list[dict[str, Any]]:
         return _extract_results(self._request("GET", f"environments/{env_api_key}/webhooks/"))
 
@@ -148,11 +317,21 @@ class FlagsmithClient:
         params: dict[str, Any] = {"page_size": page_size}
         if project_id is not None:
             params["project"] = project_id
+            try:
+                return _extract_results(
+                    self._request(
+                        "GET",
+                        f"projects/{project_id}/audit/",
+                        params={"page_size": page_size},
+                    )
+                )
+            except FlagsmithError:
+                pass
         try:
             return _extract_results(self._request("GET", "audit/", params=params))
         except FlagsmithError:
-            if organisation_id is None:
-                raise
-            return _extract_results(
-                self._request("GET", f"organisations/{organisation_id}/audit/", params=params)
-            )
+            if organisation_id is not None:
+                return _extract_results(
+                    self._request("GET", f"organisations/{organisation_id}/audit/", params=params)
+                )
+            raise

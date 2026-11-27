@@ -29,6 +29,17 @@ def _state_matches_target(actual: dict[str, Any], target_body: dict[str, Any]) -
     for key in ("enabled", "feature_state_value"):
         if key in target_body and actual.get(key) != target_body[key]:
             return False
+    if "multivariate_feature_state_values" in target_body:
+        expected_mv = {
+            int(item["multivariate_feature_option"]): float(item["percentage_allocation"])
+            for item in target_body["multivariate_feature_state_values"]
+        }
+        actual_mv = {
+            int(item["multivariate_feature_option"]): float(item["percentage_allocation"])
+            for item in actual.get("multivariate_feature_state_values") or []
+        }
+        if expected_mv != actual_mv:
+            return False
     return True
 
 

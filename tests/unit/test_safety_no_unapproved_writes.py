@@ -120,6 +120,9 @@ def test_no_unapproved_write_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPat
                 200, json=[{"name": "production", "api_key": "env-prod"}]
             )
         )
+        respx.get("http://localhost:8000/api/v1/projects/10/audit/?page_size=5").mock(
+            return_value=httpx.Response(200, json=[])
+        )
         respx.get("http://localhost:8000/api/v1/audit/?page_size=5&project=10").mock(
             return_value=httpx.Response(200, json=[])
         )

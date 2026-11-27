@@ -40,7 +40,7 @@ def _validate_operation(op: ApiOperation, option: PlanOption, writable_envs: set
         raise ExecutorError(
             f"Blocked write to non-writable environment '{option.environment}'."
         )
-    if op.method not in {"PATCH", "POST"}:
+    if op.method not in {"PATCH", "POST", "PUT"}:
         raise ExecutorError(f"Blocked disallowed HTTP method '{op.method}'.")
     if not _ALLOWED_PATH_RE.match(op.path.lstrip("/")):
         raise ExecutorError(f"Blocked write outside featurestates allowlist: {op.path}")
@@ -93,6 +93,12 @@ def execute_option(
     for op in option.operations:
         if op.method == "PATCH" and option.environment_api_key and option.feature_state_id:
             last_state = client.patch_feature_state(
+                option.environment_api_key,
+                option.feature_state_id,
+                op.body,
+            )
+        elif op.method == "PUT" and option.environment_api_key and option.feature_state_id:
+            last_state = client.put_feature_state(
                 option.environment_api_key,
                 option.feature_state_id,
                 op.body,

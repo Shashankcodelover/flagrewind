@@ -1,0 +1,290 @@
+{
+  "synthetic": true,
+  "by_mode": {
+    "rules-only": {
+      "runs": 14,
+      "top1_accuracy": 1.0,
+      "top3_accuracy": 1.0,
+      "abstention_accuracy": 1.0,
+      "action_correctness": 1.0,
+      "median_time_to_mitigation_s": 1.8,
+      "median_time_to_recovery_s": null,
+      "mean_llm_calls": 0,
+      "mean_tokens": null,
+      "unapproved_writes": 0
+    }
+  },
+  "raw_runs": [
+    {
+      "scenario_id": "S01",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "tax_engine_v2",
+        "dark_mode"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 7.641,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S02",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "payment_timeout_ms",
+        "checkout_layout"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 1.813,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S03",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "profile_v2",
+        "export_csv",
+        "search_ranker_v2",
+        "checkout_layout",
+        "checkout_layout"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 6.125,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S04",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "tax_engine_v2",
+        "checkout_layout"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 6.859,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S05",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "tax_engine_v2",
+        "dark_mode"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 5.359,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S06",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "not_flag_related",
+      "ranked_features": [
+        "tax_engine_v2"
+      ],
+      "recommended_action": "none",
+      "time_to_mitigation_s": 0.047,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S07",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "not_flag_related",
+      "ranked_features": [
+        "dark_mode"
+      ],
+      "recommended_action": "none",
+      "time_to_mitigation_s": 0.078,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S08",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "payment_provider",
+        "export_csv"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 1.782,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S09",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "payment_timeout_ms"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 1.468,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "S10",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "eu-customers"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 0.016,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "H01",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "profile_v2",
+        "dark_mode",
+        "checkout_layout"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 5.219,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "H02",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "not_flag_related",
+      "ranked_features": [
+        "maintenance_banner",
+        "export_csv"
+      ],
+      "recommended_action": "none",
+      "time_to_mitigation_s": 0.032,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "H03",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "payment_timeout_ms",
+        "search_ranker_v2",
+        "dark_mode",
+        "tax_engine_v2"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 1.625,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    },
+    {
+      "scenario_id": "H04",
+      "mode": "rules-only",
+      "seed": 42,
+      "verdict": "flag_change",
+      "ranked_features": [
+        "payment_provider",
+        "tax_engine_v2"
+      ],
+      "recommended_action": "revert_change",
+      "time_to_mitigation_s": 2.375,
+      "time_to_recovery_s": null,
+      "llm_calls": 0,
+      "tokens": null,
+      "unapproved_writes": 0,
+      "synthetic": true
+    }
+  ],
+  "live_flagsmith_cloud": true,
+  "heldout_tag": "drills-heldout-v1",
+  "timestamp": "20261127T022911Z",
+  "core_10_by_mode": {
+    "rules-only": {
+      "runs": 10,
+      "top1_accuracy": 1.0,
+      "top3_accuracy": 1.0,
+      "abstention_accuracy": 1.0,
+      "action_correctness": 1.0,
+      "median_time_to_mitigation_s": 1.8,
+      "median_time_to_recovery_s": null,
+      "mean_llm_calls": 0,
+      "mean_tokens": null,
+      "unapproved_writes": 0
+    }
+  },
+  "heldout_4_by_mode": {
+    "rules-only": {
+      "runs": 4,
+      "top1_accuracy": 1.0,
+      "top3_accuracy": 1.0,
+      "abstention_accuracy": 1.0,
+      "action_correctness": 1.0,
+      "median_time_to_mitigation_s": 2.0,
+      "median_time_to_recovery_s": null,
+      "mean_llm_calls": 0,
+      "mean_tokens": null,
+      "unapproved_writes": 0
+    }
+  }
+}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 import time
@@ -127,6 +128,36 @@ def _build_flagsmith_from_config(cfg: FlagRewindConfig) -> FlagsmithClient | Non
     return FlagsmithClient(api_url, key)
 
 
+def _load_dotenv_if_local(config_path: Path) -> None:
+    if "PYTEST_CURRENT_TEST" in os.environ:
+        return
+    env_file = config_path.resolve().parent / ".env"
+    if not env_file.exists():
+        return
+    for raw in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip())
+
+
+def _resolve_env_key_lookup(cfg: FlagRewindConfig) -> dict[str, str]:
+    fs_client = _build_flagsmith_from_config(cfg)
+    if fs_client is None:
+        return {}
+    try:
+        with fs_client:
+            proj = fs_client.get_project_by_name(cfg.flagsmith.project)
+            return {
+                str(e["name"]).lower(): str(e["api_key"])
+                for e in fs_client.list_environments(int(proj["id"]))
+                if e.get("name") and e.get("api_key")
+            }
+    except FlagsmithError:
+        return {}
+
+
 def _load_saved_incident(
     state_dir: Path, incident_id: str
 ) -> tuple[EvidenceBundle, RankingVerdict, MitigationPlan, str]:
@@ -179,12 +210,18 @@ def _run_investigation(
         )
 
     events = store.read_all()
+    env_lookup = (
+        {}
+        if "PYTEST_CURRENT_TEST" in os.environ
+        else _resolve_env_key_lookup(runtime.config)
+    )
     mitigation_plan = build_mitigation_plan(
         incident_id=inc_id,
         bundle=bundle,
         verdict=verdict,
         events=events,
         config=runtime.config,
+        env_key_lookup=env_lookup,
     )
     save_incident_state(
         state_dir=runtime.state_dir,
@@ -238,6 +275,7 @@ def main(
     ] = False,
 ) -> None:
     """Load and validate configuration before running any subcommand."""
+    _load_dotenv_if_local(config)
     console = _make_console()
     try:
         loaded = load_config(config)
@@ -284,7 +322,33 @@ def journal(
         if fs_client is None:
             return
         with fs_client:
-            poller = AuditPoller(fs_client, store)
+            project_id: int | None = None
+            org_id: int | None = None
+            env_keys: dict[str, str] = {}
+            env_ids: dict[str, int] = {}
+            try:
+                orgs = fs_client.list_organisations()
+                if orgs and "id" in orgs[0]:
+                    org_id = int(orgs[0]["id"])
+                proj = fs_client.get_project_by_name(runtime.config.flagsmith.project)
+                project_id = int(proj["id"])
+                for env in fs_client.list_environments(project_id):
+                    if env.get("name") and env.get("api_key"):
+                        ename = str(env["name"]).lower()
+                        env_keys[ename] = str(env["api_key"])
+                        if "id" in env:
+                            env_ids[ename] = int(env["id"])
+            except FlagsmithError:
+                pass
+
+            poller = AuditPoller(
+                fs_client,
+                store,
+                project_id=project_id,
+                organisation_id=org_id,
+                env_keys=env_keys,
+                env_ids=env_ids,
+            )
             while not stop_event.is_set():
                 try:
                     poller.poll_once()

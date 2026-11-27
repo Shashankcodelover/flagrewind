@@ -142,7 +142,12 @@ class DemoSymptomReader:
         self.cfg = cfg
         self.base_url = cfg.demo_url.rstrip("/")
         self._owns_client = client is None
-        self._client = client or httpx.Client(base_url=self.base_url, timeout=10.0)
+        is_local = "localhost" in self.base_url or "127.0.0.1" in self.base_url
+        self._client = client or httpx.Client(
+            base_url=self.base_url,
+            timeout=10.0,
+            trust_env=not is_local,
+        )
 
     def __enter__(self) -> DemoSymptomReader:
         return self

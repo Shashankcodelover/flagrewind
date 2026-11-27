@@ -10,9 +10,22 @@ import argparse
 import os
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
+
+
+def _load_dotenv() -> None:
+    env_file = Path(".env")
+    if not env_file.exists():
+        return
+    for raw in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip())
 
 TARGET_ORG_NAME = "FlagRewind Demo"
 TARGET_PROJECT_NAME = "Acme Checkout"
@@ -203,23 +216,23 @@ class FlagsmithBootstrapClient:
         return by_name
 
     def _ensure_mv_options(self, project_id: int, feature_id: int, spec: FeatureSpec) -> None:
-        existing = _extract_results(
-            self.request(
-                "GET", f"projects/{project_id}/features/{feature_id}/multivariate-options/"
-            )
-        )
-        if existing:
+        feat = self.request("GET", f"projects/{project_id}/features/{feature_id}/")
+        existing_opts = feat.get("multivariate_options", []) if isinstance(feat, dict) else []
+        if existing_opts:
             return
-        for value, weight in spec.multivariate_options:
-            self.request(
-                "POST",
-                f"projects/{project_id}/features/{feature_id}/multivariate-options/",
-                json={
-                    "type": "unicode",
-                    "string_value": value,
-                    "default_percentage_allocation": weight,
-                },
-            )
+        mv_payload = [
+            {
+                "type": "unicode",
+                "string_value": value,
+                "default_percentage_allocation": weight,
+            }
+            for value, weight in spec.multivariate_options
+        ]
+        self.request(
+            "PATCH",
+            f"projects/{project_id}/features/{feature_id}/",
+            json={"multivariate_options": mv_payload},
+        )
 
     def ensure_segments(self, project_id: int) -> dict[str, dict[str, Any]]:
         """Create synthetic user segments if missing."""
@@ -318,6 +331,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _load_dotenv()
     args = _parse_args(argv)
     api_key = os.environ.get(args.key_env) or os.environ.get("FLAGREWIND_ADMIN_KEY")
     secret = os.environ.get("FLAGREWIND_WEBHOOK_SECRET", "flagrewind-local-webhook-secret")

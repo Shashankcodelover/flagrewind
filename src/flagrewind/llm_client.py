@@ -40,12 +40,15 @@ class OpenAICompatibleLLMClient:
         model: str,
         temperature: float = 0.0,
         timeout_s: float = 30.0,
+        min_interval_s: float = 0.0,
         openai_client: OpenAI | None = None,
     ) -> None:
         self.base_url = base_url
         self.model = model
         self.temperature = temperature
         self.timeout_s = timeout_s
+        self.min_interval_s = min_interval_s
+        self._last_call_ts = 0.0
         self._client = openai_client or OpenAI(
             base_url=base_url,
             api_key=api_key,
@@ -54,7 +57,9 @@ class OpenAICompatibleLLMClient:
         )
 
     @classmethod
-    def from_config(cls, cfg: LLMConfig) -> OpenAICompatibleLLMClient | None:
+    def from_config(
+        cls, cfg: LLMConfig, *, min_interval_s: float = 0.0
+    ) -> OpenAICompatibleLLMClient | None:
         """Build client from environment variables referenced by LLMConfig, or None if unset."""
         base_url = resolve_env(cfg.base_url_env)
         model = resolve_env(cfg.model_env)
@@ -72,7 +77,18 @@ class OpenAICompatibleLLMClient:
             model=model,
             temperature=cfg.temperature,
             timeout_s=float(cfg.timeout_s),
+            min_interval_s=min_interval_s,
         )
+
+    def _pace(self) -> None:
+        if self.min_interval_s <= 0 or self._last_call_ts <= 0:
+            self._last_call_ts = time.monotonic()
+            return
+        elapsed = time.monotonic() - self._last_call_ts
+        wait = self.min_interval_s - elapsed
+        if wait > 0:
+            time.sleep(wait)
+        self._last_call_ts = time.monotonic()
 
     def complete_json(
         self,
@@ -101,13 +117,13 @@ class OpenAICompatibleLLMClient:
             {"role": "user", "content": user_prompt},
         ]
 
-        # Rate-limiting / pacing and exponential backoff for free-tier APIs (e.g. Gemini 15 RPM).
-        # Retry up to 3 times on 429/ResourceExhausted with jittered backoff.
+        # Pacing + exponential backoff for free-tier limits (429) and transient capacity (503).
         max_attempts = 4
         backoff_delay = 5.0
         resp = None
 
         for attempt in range(max_attempts):
+            self._pace()
             try:
                 resp = self._client.chat.completions.create(
                     model=self.model,
@@ -118,17 +134,27 @@ class OpenAICompatibleLLMClient:
                 break
             except OpenAIError as exc:
                 err_msg = str(exc).lower()
-                is_rate_limit = (
-                    "429" in err_msg or "resource_exhausted" in err_msg or "quota" in err_msg
+                is_transient = any(
+                    tok in err_msg
+                    for tok in (
+                        "429",
+                        "503",
+                        "resource_exhausted",
+                        "quota",
+                        "high demand",
+                        "unavailable",
+                        "timed out",
+                    )
                 )
-                if is_rate_limit and attempt < max_attempts - 1:
+                if is_transient and attempt < max_attempts - 1:
                     time.sleep(backoff_delay)
                     backoff_delay *= 2.0
                     continue
 
                 # Fallback once from json_schema to json_object if endpoint rejects strict schema.
-                if json_schema is not None and not is_rate_limit:
+                if json_schema is not None and not is_transient:
                     try:
+                        self._pace()
                         resp = self._client.chat.completions.create(
                             model=self.model,
                             messages=messages,  # type: ignore[arg-type]

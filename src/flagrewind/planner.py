@@ -18,7 +18,7 @@ from flagrewind.ranking.schema import RankingVerdict
 class ApiOperation(BaseModel):
     """Single allowlisted Admin API mutation (never DELETE)."""
 
-    method: Literal["PATCH", "POST"]
+    method: Literal["PATCH", "POST", "PUT"]
     path: str
     body: dict[str, Any]
 
@@ -67,13 +67,18 @@ def compute_plan_hash(plan: MitigationPlan, option_n: int) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def _snapshot_to_patch_body(snapshot: FlagStateSnapshot) -> dict[str, Any]:
+def _snapshot_to_patch_body(
+    snapshot: FlagStateSnapshot, *, feature_id: int | None = None
+) -> tuple[Literal["PATCH", "PUT"], dict[str, Any]]:
     body: dict[str, Any] = {"enabled": snapshot.enabled}
     if snapshot.value is not None:
         body["feature_state_value"] = snapshot.value
-    if snapshot.multivariate_values is not None:
+    if snapshot.multivariate_values:
+        if feature_id is not None:
+            body["feature"] = feature_id
         body["multivariate_feature_state_values"] = snapshot.multivariate_values
-    return body
+        return "PUT", body
+    return "PATCH", body
 
 
 def _precondition_from_snapshot(snapshot: FlagStateSnapshot | None) -> dict[str, Any]:
@@ -100,6 +105,8 @@ def _build_option_for_candidate(
     )
     precondition = _precondition_from_snapshot(event.new)
     can_exec = bool(target_path) and event.previous is not None
+    raw_feat_id = event.raw_ref.get("feature_id")
+    feat_id = int(raw_feat_id) if raw_feat_id is not None else None
 
     if action == "revert_change":
         if event.previous is None:
@@ -119,8 +126,11 @@ def _build_option_for_candidate(
                 executable=False,
                 unexecutable_reason="Missing previous state in journal.",
             )
-        target_body = _snapshot_to_patch_body(event.previous)
-        inverse_body = _snapshot_to_patch_body(event.new) if event.new else {}
+        target_method, target_body = _snapshot_to_patch_body(event.previous, feature_id=feat_id)
+        if event.new:
+            inv_method, inverse_body = _snapshot_to_patch_body(event.new, feature_id=feat_id)
+        else:
+            inv_method, inverse_body = "PATCH", {}
         new_enabled = event.new.enabled if event.new else "?"
         new_value = event.new.value if event.new else "?"
         preview = (
@@ -130,17 +140,25 @@ def _build_option_for_candidate(
         )
     else:
         # disable_for_segment explicitly disables the feature in the segment override.
+        target_method = "PATCH"
         target_body = {"enabled": False}
-        inverse_body = _snapshot_to_patch_body(event.new) if event.new else {"enabled": True}
+        if event.new:
+            inv_method, inverse_body = _snapshot_to_patch_body(event.new, feature_id=feat_id)
+        else:
+            inv_method, inverse_body = "PATCH", {"enabled": True}
         preview = (
             f"Disable {event.feature} strictly for segment "
             f"'{event.segment or 'unknown'}' in {event.environment}"
         )
         can_exec = bool(target_path) and event.segment is not None
 
-    ops = [ApiOperation(method="PATCH", path=target_path, body=target_body)] if can_exec else []
+    ops = (
+        [ApiOperation(method=target_method, path=target_path, body=target_body)]
+        if can_exec
+        else []
+    )
     inv = (
-        [ApiOperation(method="PATCH", path=target_path, body=inverse_body)]
+        [ApiOperation(method=inv_method, path=target_path, body=inverse_body)]
         if can_exec and inverse_body
         else []
     )

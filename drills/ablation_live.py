@@ -1,4 +1,4 @@
-"""Run live LLM vs rules-only ablation across all 10 frozen scenarios (SYNTHETIC)."""
+"""Run live LLM vs rules-only ablation across all 14 scenarios (10 core + 4 held-out, SYNTHETIC)."""
 
 from __future__ import annotations
 
@@ -182,7 +182,7 @@ def _scenario_symptoms(scenario_id: str, onset: datetime, repo_root: Path) -> tu
 
 
 def run_ablation(repo_root: Path, out_path: Path) -> dict[str, Any]:
-    """Run all 10 frozen scenarios in rules-only and live LLM modes."""
+    """Run all 14 scenarios (10 core + 4 held-out) in rules-only and live LLM modes."""
     _load_dotenv(repo_root / ".env")
     cfg = load_config(repo_root / "flagrewind.yaml")
     code_idx = CodeIndex.build(repo_root, cfg.code.paths)
@@ -197,11 +197,12 @@ def run_ablation(repo_root: Path, out_path: Path) -> dict[str, Any]:
     heldout_truth_path = repo_root / "drills" / "answers" / "ground_truth_heldout.json"
     if heldout_truth_path.exists():
         truth.update(json.loads(heldout_truth_path.read_text())["scenarios"])
-    llm_client = OpenAICompatibleLLMClient.from_config(cfg.llm)
+    llm_client = OpenAICompatibleLLMClient.from_config(cfg.llm, min_interval_s=4.5)
     if llm_client is None:
         raise RuntimeError("LLM env vars not configured; cannot run live LLM ablation.")
 
     runs: list[DrillRunRecord] = []
+    per_scenario_llm: list[dict[str, Any]] = []
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
         for scenario in scenarios:
@@ -304,8 +305,36 @@ def run_ablation(repo_root: Path, out_path: Path) -> dict[str, Any]:
             l_elapsed = round(time.monotonic() - t1, 3)
             print(
                 f"[{sid}] mode={l_mode} verdict={l_verdict.verdict} "
-                f"calls={l_meta.get('calls')} ({l_elapsed}s)",
+                f"calls={l_meta.get('calls')} tokens={l_meta.get('tokens')} ({l_elapsed}s)",
                 flush=True,
+            )
+            ranked_llm = [
+                cand_by_id[r.change_id]
+                for r in l_verdict.ranking
+                if r.change_id in cand_by_id
+            ]
+            truth_row = truth[sid]
+            exp_culprit = truth_row["culprit_feature"]
+            should_abstain = bool(truth_row["should_abstain"])
+            top1_ok = (
+                l_verdict.recommended.action == "none"
+                if should_abstain
+                else bool(ranked_llm and ranked_llm[0] == exp_culprit)
+            )
+            abstain_ok = (l_verdict.recommended.action == "none") if should_abstain else None
+            per_scenario_llm.append(
+                {
+                    "scenario_id": sid,
+                    "model": llm_client.model,
+                    "mode": l_mode,
+                    "top1_correct": top1_ok,
+                    "abstention_correct": abstain_ok,
+                    "action_correct": l_verdict.recommended.action == truth_row["expected_action"],
+                    "tokens": l_meta.get("tokens"),
+                    "latency_s": l_elapsed,
+                    "llm_calls": int(l_meta.get("calls") or 0),
+                    "fallback_fired": l_mode != f"llm ({llm_client.model})",
+                }
             )
             runs.append(
                 DrillRunRecord(
@@ -313,11 +342,7 @@ def run_ablation(repo_root: Path, out_path: Path) -> dict[str, Any]:
                     mode=l_mode,
                     seed=42,
                     verdict=l_verdict.verdict,
-                    ranked_features=[
-                        cand_by_id[r.change_id]
-                        for r in l_verdict.ranking
-                        if r.change_id in cand_by_id
-                    ],
+                    ranked_features=ranked_llm,
                     recommended_action=l_verdict.recommended.action,
                     time_to_mitigation_s=l_elapsed,
                     llm_calls=int(l_meta.get("calls") or 0),
@@ -328,7 +353,8 @@ def run_ablation(repo_root: Path, out_path: Path) -> dict[str, Any]:
 
     summary = score_runs(runs, truth)
     summary["live_llm_model"] = llm_client.model
-    summary["live_flagsmith_docker"] = False
+    summary["live_flagsmith_cloud"] = False
+    summary["per_scenario_llm"] = per_scenario_llm
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary

@@ -246,3 +246,60 @@ def test_evidence_bundle_staging_env_zero_and_code_index(tmp_path: Path) -> None
     assert bundle.candidates[1].environment == "staging"
     assert bundle.candidates[1].features.env == 0.0
     assert bundle.candidates[1].rules_score == 0.0
+
+
+@respx.mock
+def test_audit_poller_snapshot_diff_fallback_when_audit_empty(tmp_path: Path) -> None:
+    base = "http://localhost:8000/api/v1/"
+    respx.get(f"{base}projects/10/audit/?page_size=50").mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+    respx.get(f"{base}projects/10/features/").mock(
+        return_value=httpx.Response(200, json={"results": [{"id": 5, "name": "tax_engine_v2"}]})
+    )
+    respx.get(f"{base}projects/10/segments/").mock(
+        return_value=httpx.Response(
+            200, json={"results": [{"id": 1, "name": "eu-customers", "rules": "DE,FR"}]}
+        )
+    )
+    respx.get(f"{base}environments/env-prod/featurestates/").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={"results": [{"id": 77, "feature": 5, "enabled": False}]},
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "id": 77,
+                            "feature": 5,
+                            "enabled": True,
+                            "updated_at": "2026-11-26T09:10:00Z",
+                        }
+                    ]
+                },
+            ),
+        ]
+    )
+
+    store = JournalStore(tmp_path / "journal.jsonl", tmp_path / "heartbeat.json")
+    with FlagsmithClient(base, "agent-key") as fs:
+        poller = AuditPoller(
+            fs,
+            store,
+            project_id=10,
+            env_keys={"production": "env-prod"},
+        )
+        # First poll seeds baseline snapshot cleanly (0 events emitted)
+        first = poller.poll_once()
+        # Second poll detects enabled False -> True diff cleanly without storing env key
+        second = poller.poll_once()
+
+    assert first == []
+    assert len(second) == 1
+    assert second[0].feature == "tax_engine_v2"
+    assert second[0].previous is not None and second[0].previous.enabled is False
+    assert second[0].new is not None and second[0].new.enabled is True
+    assert "environment_api_key" not in second[0].raw_ref

@@ -55,12 +55,12 @@ def test_bootstrap_creates_demo_world_from_empty_org() -> None:
         ]
     )
     mv_feature_id = 200 + len(DEMO_FEATURES) - 1
-    respx.get(f"{base}projects/10/features/{mv_feature_id}/multivariate-options/").mock(
-        return_value=httpx.Response(200, json={"results": []})
+    respx.get(f"{base}projects/10/features/{mv_feature_id}/").mock(
+        return_value=httpx.Response(200, json={"id": mv_feature_id, "multivariate_options": []})
     )
-    mv_route = respx.post(
-        f"{base}projects/10/features/{mv_feature_id}/multivariate-options/"
-    ).mock(return_value=httpx.Response(201, json={"id": 999}))
+    mv_route = respx.patch(f"{base}projects/10/features/{mv_feature_id}/").mock(
+        return_value=httpx.Response(200, json={"id": mv_feature_id, "multivariate_options": []})
+    )
 
     respx.get(f"{base}projects/10/segments/").mock(
         return_value=httpx.Response(200, json={"results": []})
@@ -92,7 +92,7 @@ def test_bootstrap_creates_demo_world_from_empty_org() -> None:
     assert len(summary["segments"]) == len(DEMO_SEGMENTS)
     assert summary["demo_server_key"] == "ser.secret123"
     assert feature_route.call_count == len(DEMO_FEATURES)
-    assert mv_route.call_count == 2
+    assert mv_route.call_count == 1
     assert seg_route.call_count == 2
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,19 +14,32 @@ from pydantic import BaseModel, Field
 _SECRET_PATTERNS = (
     re.compile(r"(Api-Key\s+)[A-Za-z0-9._-]+", re.IGNORECASE),
     re.compile(r"(Bearer\s+)[A-Za-z0-9._-]+", re.IGNORECASE),
-    re.compile(r"\b(ser\.[A-Za-z0-9._-]{8,})\b"),
-    re.compile(r"\b(AIza[0-9A-Za-z_-]{16,})\b"),
+    re.compile(r"\b(ser\.[A-Za-z0-9._-]{6,})\b"),
+    re.compile(r"\b(AIza[0-9A-Za-z_-]{12,})\b"),
+    re.compile(r"\b(AQ\.[0-9A-Za-z._-]{12,})\b"),
+)
+
+_ENV_SECRET_VARS = (
+    "FLAGREWIND_ADMIN_KEY",
+    "FLAGREWIND_DRILL_KEY",
+    "FLAGSMITH_DEMO_SERVER_KEY",
+    "FLAGREWIND_WEBHOOK_SECRET",
+    "LLM_API_KEY",
 )
 
 
 def redact_secrets(value: str) -> str:
-    """Redact API keys and bearer tokens before logging to disk."""
+    """Redact API keys, bearer tokens, and active env secrets before logging to disk."""
     redacted = value
     for idx, pattern in enumerate(_SECRET_PATTERNS):
         if idx < 2:
             redacted = pattern.sub(r"\1[REDACTED]", redacted)
         else:
             redacted = pattern.sub("[REDACTED]", redacted)
+    for var in _ENV_SECRET_VARS:
+        secret = os.environ.get(var, "").strip()
+        if len(secret) >= 8 and secret in redacted:
+            redacted = redacted.replace(secret, "[REDACTED]")
     return redacted
 
 
