@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FlagRewind — On-Call Flagsmith Rollback Agent (Track 02)</title>
+<style>
+  :root{--bg:#0b1020;--card:#131b31;--line:#263253;--fg:#e6ecff;--muted:#9aa8cc;--acc:#5ce1e6;--ok:#38d399;--warn:#f7b955;--bad:#ff6b7a}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{border-bottom:1px solid var(--line);padding:18px 24px;background:#0e1529}
+  .wrap{max-width:1120px;margin:0 auto;padding:20px 24px}
+  .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .badge{font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--muted)}
+  .badge.ok{color:var(--ok);border-color:#235e4b} .badge.warn{color:var(--warn);border-color:#694e22}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:18px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .kpi{font-size:24px;font-weight:700;color:var(--acc);margin:4px 0}
+  .tabs{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+  .tab{background:var(--card);color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600}
+  .tab.active{color:var(--bg);background:var(--acc);border-color:var(--acc)}
+  .panel{display:none} .panel.active{display:block}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{color:var(--muted);font-weight:600}
+  code,pre{background:#090d1a;border:1px solid var(--line);border-radius:6px;padding:2px 6px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12.5px}
+  pre{padding:12px;overflow:auto;white-space:pre-wrap}
+  select,input,button{background:#090d1a;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit}
+  button.primary{background:var(--acc);color:#090d1a;border-color:var(--acc);font-weight:700;cursor:pointer}
+  button.danger{background:#2d1620;color:var(--bad);border-color:#6e2b3c;cursor:pointer}
+  a{color:var(--acc);text-decoration:none} a:hover{text-decoration:underline}
+  .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:10px 0}
+  .msg{padding:10px 12px;border-radius:8px;border:1px solid var(--line);margin-top:10px}
+  .msg.ok{border-color:#235e4b;background:#0e251e;color:var(--ok)}
+  .msg.bad{border-color:#6e2b3c;background:#261219;color:var(--bad)}
+  .msg.warn{border-color:#694e22;background:#241c0d;color:var(--warn)}
+  .muted{color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap" style="padding:0">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;align-items:center">
+      <div>
+        <h1 style="margin:0;font-size:20px">FlagRewind — On-Call Flagsmith Triage &amp; Deterministic Rollback Agent</h1>
+        <div class="muted">Toggle Wars 2026 (Track 02: AI Agents &amp; Feature Flags) · Read-Only Public Showcase &amp; Evidence Console</div>
+      </div>
+      <div class="row" style="margin:0">
+        <a href="https://github.com/Shashankcodelover/flagrewind" target="_blank" rel="noopener">GitHub Repo</a>
+        <span>·</span>
+        <a href="/health" target="_blank">/health</a>
+        <span>·</span>
+        <a href="/api/proof" target="_blank">/api/proof</a>
+        <span>·</span>
+        <a href="/api/scenarios" target="_blank">/api/scenarios</a>
+        <span>·</span>
+        <a href="/api/ablation" target="_blank">/api/ablation</a>
+      </div>
+    </div>
+    <div class="badges">
+      <span class="badge ok">SYNTHETIC DEMO + LIVE FLAGSMITH CLOUD PROOFS</span>
+      <span class="badge ok">0 UNAPPROVED WRITES ACROSS ALL RUNS</span>
+      <span class="badge ok">HELD-OUT FROZEN AT TAG drills-heldout-v1</span>
+      <span class="badge warn">VERIFY: LOCAL RUN (GITHUB ACTIONS BLOCKED BY BILLING HOLD)</span>
+      <span class="badge">READ-ONLY SHOWCASE (ZERO WRITE KEYS DEPLOYED)</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="grid" id="kpis"></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-tab="sim">1. Incident Simulator &amp; Approval Gate</button>
+    <button class="tab" data-tab="proof">2. Live Cloud E2E Proof (n=1)</button>
+    <button class="tab" data-tab="runs">3. 14-Scenario Suite &amp; Advisory LLM Ablation</button>
+    <button class="tab" data-tab="arch">4. Autonomy Contract &amp; Flagsmith API</button>
+  </div>
+
+  <section id="tab-sim" class="panel active card">
+    <h2 style="margin-top:0">Interactive Incident Triage &amp; Typed-Approval Gate Preview (SYNTHETIC)</h2>
+    <p class="muted">Select any frozen drill scenario (10 core <code>S01–S10</code> + 4 pre-tagged held-out <code>H01–H04</code>) to inspect Flagsmith Cloud diff findings, deterministic rollback preview, and code-enforced approval validation.</p>
+    <div class="row">
+      <label for="sc-select"><strong>Scenario:</strong></label>
+      <select id="sc-select"></select>
+      <span id="sc-tags" class="muted"></span>
+    </div>
+    <div id="sc-detail"></div>
+  </section>
+
+  <section id="tab-proof" class="panel card">
+    <h2 style="margin-top:0">Single Live End-to-End Closed-Loop Proof on Flagsmith Cloud (n=1, Scenario S01)</h2>
+    <p class="muted">Measured directly against <code>https://api.flagsmith.com/api/v1/</code> + live <code>demo_service</code> (<code>enable_local_evaluation=True</code>). Confirmation phrase simulated in proof script (excluding interactive human typing time).</p>
+    <div id="proof-detail"></div>
+  </section>
+
+  <section id="tab-runs" class="panel card">
+    <h2 style="margin-top:0">Complete Executed Run Ledger &amp; Same-Endpoint Honesty</h2>
+    <p class="muted">Held-out scenarios (<code>H01–H04</code>) were tagged <code>drills-heldout-v1</code> (<code>8f35022</code>) before both the live Cloud suite and the LLM ablation. <strong>The LLM is advisory only</strong> (read-only re-ranking, zero API write tools). Manual <code>n=3</code> baseline script awaits operator run (no unrecorded manual timing claimed).</p>
+    <div id="runs-detail"></div>
+  </section>
+
+  <section id="tab-arch" class="panel card">
+    <h2 style="margin-top:0">Code-Enforced Autonomy Contract &amp; Flagsmith Surfaces</h2>
+    <table>
+      <thead><tr><th>Rule Tier</th><th>Exact Code Boundary</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Does alone</strong></td><td>Polls Flagsmith Admin API (<code>/api/v1/</code>), verifies HMAC-SHA256 webhooks (<code>401</code>/<code>200</code>), diffs state snapshots (<code>AuditPoller</code> for Cloud Free tier <code>/audit/</code> = 0), reads metrics/errors &amp; code frames, ranks candidates, drafts deterministic inverse plans, writes Markdown + redacted audit JSONL.</td></tr>
+        <tr><td><strong>Asks first</strong></td><td>Every Flagsmith write (<code>apply</code>, <code>undo</code>, next-suspect) requires exact interactive phrase <code>apply &lt;plan_id&gt; option &lt;n&gt;</code> in <code>approval.py</code> + hash match in <code>executor.py</code>. Non-interactive runs never mutate.</td></tr>
+        <tr><td><strong>Asks instead</strong></td><td>Top confidence &lt; <code>0.6</code>, non-flag fault (<code>S07</code>, <code>H02</code>), staging-only edit (<code>S06</code>), or incomplete observation journal outputs <code>action="none"</code>.</td></tr>
+        <tr><td><strong>Never does</strong></td><td>Never calls <code>DELETE</code>, never creates flags/segments/envs, never writes outside <code>writable: true</code> (<code>production</code>), aborts (<code>exit 5</code>) on state drift, never gives LLM write tools.</td></tr>
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:12px">Flagsmith surfaces verified: Feature Flags · Segments &amp; Overrides · Remote Config &amp; Multivariate · Admin API · Environment Webhooks (loopback HMAC proof) · Python SDK (<code>flagsmith&gt;=3.8</code>) · Optional Read-Only MCP Client.</p>
+  </section>
+</main>
+
+<script>
+const DATA = __SHOWCASE_DATA_JSON__;
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+function renderKPIs() {
+  const p = DATA.proof;
+  const kpis = [
+    ["Live E2E Revert (n=1)", p.alert_to_revert_applied_s_automated + "s", "alert -> PUT applied (automated)"],
+    ["Live Cloud Recovery (n=1)", p.alert_to_recovery_s_automated + "s", p.consecutive_healthy_windows + " consecutive <5% windows"],
+    ["Live Cloud 14-Suite (rules)", "14 / 14", "10 core + 4 held-out (1.8s median)"],
+    ["Advisory LLM (gemini-flash-lite)", "14/14 top-1", "11/14 action (0/14 fallbacks)"],
+    ["Unapproved Writes", String(p.unapproved_writes), "Enforced in approval.py & executor.py"],
+  ];
+  document.getElementById("kpis").innerHTML = kpis.map(([t,v,sub]) =>
+    `<div class="card"><div class="muted">${esc(t)}</div><div class="kpi">${esc(v)}</div><div class="muted">${esc(sub)}</div></div>`
+  ).join("");
+}
+
+function renderScenario(id) {
+  const sc = DATA.scenarios.find(x => x.id === id) || DATA.scenarios[0];
+  const tags = [sc.group, sc.environment, sc.kind].map(t => `<span class="badge">${esc(t)}</span>`).join(" ");
+  document.getElementById("sc-tags").innerHTML = tags;
+  const planId = `PLN-${esc(sc.id)}`;
+  const reqPhrase = `apply ${planId} option 1`;
+  const gateHtml = sc.should_abstain
+    ? `<div class="msg ok"><strong>Abstention Gate:</strong> Verdict <code>${esc(sc.cloud_verdict)}</code> &rarr; <code>action = "none"</code>. Zero Flagsmith writes proposed.</div>`
+    : sc.advisory_only
+    ? `<div class="msg warn"><strong>Manual Advisory Plan Only:</strong> <code>executor.py</code> does not auto-mutate segment rules (<code>S10</code>). Operator edits segment rule safely in UI after review.</div>`
+    : `
+      <div style="margin-top:12px">
+        <div class="muted"><strong>Deterministic Dry-Run Plan (<code>${planId}</code>):</strong> <code>${esc(sc.preview)}</code></div>
+        <div class="row">
+          <input id="sim-phrase" style="min-width:260px" placeholder="Type exact phrase: ${reqPhrase}" aria-label="Approval phrase">
+          <button class="primary" id="btn-approve">Simulate Typed Approval</button>
+          <button class="danger" id="btn-reject">Reject Plan</button>
+        </div>
+        <div id="sim-result" class="muted">Waiting for explicit operator confirmation before any simulated Admin API call. (Read-only UI: no live API call made.)</div>
+      </div>`;
+  document.getElementById("sc-detail").innerHTML = `
+    <p>${esc(sc.description)}</p>
+    <table>
+      <tbody>
+        <tr><th>Culprit Target</th><td><code>${esc(sc.expected_culprit || "none (host / staging)")}</code></td></tr>
+        <tr><th>Cloud Rules-Only Outcome (n=14 suite)</th><td>Top-1: <code>${esc((sc.cloud_ranked || [])[0] || "none")}</code> · Action: <code>${esc(sc.cloud_action)}</code> · Latency: <code>${esc(sc.cloud_time_s)}s</code></td></tr>
+        <tr><th>Advisory LLM Outcome (n=14 ablation)</th><td>Model: <code>gemini-flash-lite-latest</code> · Top-1 OK: <code>${sc.llm_top1_correct}</code> · Action OK: <code>${sc.llm_action_correct}</code> · Latency: <code>${sc.llm_latency_s}s</code> · Fallback: <code>${sc.llm_fallback_fired}</code></td></tr>
+      </tbody>
+    </table>
+    ${gateHtml}
+  `;
+  const btnA = document.getElementById("btn-approve");
+  const btnR = document.getElementById("btn-reject");
+  if (btnA) {
+    btnA.onclick = () => {
+      const val = (document.getElementById("sim-phrase").value || "").trim();
+      const box = document.getElementById("sim-result");
+      if (val === reqPhrase) {
+        box.className = "msg ok";
+        box.innerHTML = `<strong>Approved (dry-run preview):</strong> Exact phrase matched <code>${esc(reqPhrase)}</code> &rarr; Precondition verified &rarr; Deterministic <code>PUT</code> revert simulated &rarr; 3 healthy recovery windows verified.`;
+      } else {
+        box.className = "msg bad";
+        box.innerHTML = `<strong>Blocked by approval.py (exit 1):</strong> Phrase mismatch (got <code>${esc(val || "<empty>")}</code>; required <code>${esc(reqPhrase)}</code>). 0 writes executed.`;
+      }
+    };
+  }
+  if (btnR) {
+    btnR.onclick = () => {
+      const box = document.getElementById("sim-result");
+      box.className = "msg ok";
+      box.innerHTML = "<strong>Rejected cleanly:</strong> Operator declined plan; Flagsmith state untouched (0 writes).";
+    };
+  }
+}
+
+function renderProof() {
+  const p = DATA.proof;
+  document.getElementById("proof-detail").innerHTML = `
+    <table>
+      <tbody>
+        <tr><th>Scenario / Model</th><td><code>${esc(p.scenario_id)}</code> · Ranking: <code>${esc(p.ranking_mode)}</code> (advisory)</td></tr>
+        <tr><th>Top Culprit vs Expected</th><td><code>${esc(p.top_culprit_feature)}</code> == <code>${esc(p.expected_culprit)}</code></td></tr>
+        <tr><th>Alert &rarr; Plan Ready</th><td><strong>${esc(p.alert_to_plan_s)}s</strong></td></tr>
+        <tr><th>Alert &rarr; Revert Applied (automated, n=1)</th><td><strong>${esc(p.alert_to_revert_applied_s_automated)}s</strong> <span class="muted">(${esc(p.approval_note)})</span></td></tr>
+        <tr><th>Alert &rarr; Verified Recovery</th><td><strong>${esc(p.alert_to_recovery_s_automated)}s</strong> across <code>${esc(p.consecutive_healthy_windows)}</code> windows: <code>${esc(p.observed_error_rates.join(" -> "))}</code></td></tr>
+        <tr><th>Webhook HMAC Proof (Loopback)</th><td>Invalid sig &rarr; HTTP <code>${esc(p.webhook_proof.invalid_hmac_status)}</code>, Valid sig &rarr; HTTP <code>${esc(p.webhook_proof.valid_hmac_status)}</code>, Cloud audit count: <code>${esc(p.cloud_free_tier_audit_count)}</code> (snapshot-diff poller used)</td></tr>
+        <tr><th>Unapproved Writes</th><td><strong>${esc(p.unapproved_writes)}</strong></td></tr>
+      </tbody>
+    </table>
+  `;
+}
+
+function renderRuns() {
+  const runsHtml = DATA.run_ledger.map(r =>
+    `<tr><td><strong>${esc(r.name)}</strong></td><td><code>${esc(r.sample_size)}</code></td><td>${esc(r.endpoint)}</td><td>${esc(r.result)}</td></tr>`
+  ).join("");
+  const llm = DATA.ablation.by_mode["llm (gemini-flash-lite-latest)"];
+  const rules = DATA.ablation.by_mode["rules-only"];
+  document.getElementById("runs-detail").innerHTML = `
+    <h3>All Executed &amp; Pending Runs</h3>
+    <table>
+      <thead><tr><th>Run</th><th>Sample Size</th><th>Endpoint &amp; Environment</th><th>Observed Result</th></tr></thead>
+      <tbody>${runsHtml}</tbody>
+    </table>
+    <h3 style="margin-top:18px">Paced LLM vs. Rules Ablation (n=14 Synthetic, Held-Out Frozen at <code>drills-heldout-v1</code> Before Run)</h3>
+    <table>
+      <thead><tr><th>Mode</th><th>Top-1</th><th>Abstention</th><th>Action Correctness</th><th>Median Latency</th><th>Fallbacks</th><th>Unapproved Writes</th></tr></thead>
+      <tbody>
+        <tr><td><code>rules-only</code></td><td>${rules.top1_accuracy} (14/14)</td><td>${rules.abstention_accuracy} (3/3)</td><td>${rules.action_correctness} (14/14)</td><td>${rules.median_time_to_mitigation_s}s</td><td>0</td><td>0</td></tr>
+        <tr><td><code>llm (gemini-flash-lite-latest)</code> <em>(advisory only)</em></td><td>${llm.top1_accuracy} (14/14)</td><td>${llm.abstention_accuracy} (3/3)</td><td><strong>${llm.action_correctness} (11/14)</strong> <span class="muted">(chose disable_for_segment on S04, S05, H01)</span></td><td>${llm.median_time_to_mitigation_s}s</td><td>0 / 14</td><td>0</td></tr>
+      </tbody>
+    </table>
+  `;
+}
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+  };
+});
+
+const sel = document.getElementById("sc-select");
+DATA.scenarios.forEach(s => {
+  const opt = document.createElement("option");
+  opt.value = s.id;
+  opt.textContent = `${s.id} — ${s.name}`;
+  sel.appendChild(opt);
+});
+sel.onchange = () => renderScenario(sel.value);
+
+renderKPIs();
+renderScenario(DATA.scenarios[0].id);
+renderProof();
+renderRuns();
+</script>
+</body>
+</html>
